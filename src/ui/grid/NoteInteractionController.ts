@@ -35,6 +35,7 @@ export type NoteMoveCallback = (
   deltaPitch: number
 ) => void;
 export type NotePasteCallback = (targetStep: number, targetPitch: number) => void;
+export type NoteAuditionCallback = (pitches: number[]) => void; // Empty array = stop audition
 
 /**
  * Interaction modes
@@ -126,8 +127,12 @@ export class NoteInteractionController {
   private onNoteResize: NoteResizeCallback | null = null;
   private onNoteMove: NoteMoveCallback | null = null;
   private onNotePaste: NotePasteCallback | null = null;
+  private onNoteAudition: NoteAuditionCallback | null = null;
   private onRenderRequest: (() => void) | null = null;
   private onCancelPan: (() => void) | null = null;
+
+  // Drag audition state
+  private lastAuditionedDeltaPitch: number = 0;
 
   // Bound event handlers
   private boundOnPointerDown: (e: MouseEvent | TouchEvent) => void;
@@ -181,6 +186,10 @@ export class NoteInteractionController {
 
   setNotePasteCallback(callback: NotePasteCallback): void {
     this.onNotePaste = callback;
+  }
+
+  setNoteAuditionCallback(callback: NoteAuditionCallback): void {
+    this.onNoteAudition = callback;
   }
 
   setRenderCallback(callback: () => void): void {
@@ -317,6 +326,7 @@ export class NoteInteractionController {
         this.mode = 'drag';
         this.dragStartWorldX = world.x;
         this.dragStartWorldY = world.y;
+        this.lastAuditionedDeltaPitch = 0;
 
         // If note is selected, drag all selected
         // If not selected and no shift, we'll handle on pointer up (delete)
@@ -376,6 +386,7 @@ export class NoteInteractionController {
       this.mode = 'drag';
       this.dragStartWorldX = world.x;
       this.dragStartWorldY = world.y;
+      this.lastAuditionedDeltaPitch = 0;
 
       if (this.selectionManager?.isSelected(noteAtPos.step, noteAtPos.pitch)) {
         this.dragNotes = this.selectionManager.getSelectedNotes();
@@ -606,11 +617,19 @@ export class NoteInteractionController {
     // Calculate delta from drag start
     const deltaX = world.x - this.dragStartWorldX;
     const deltaY = world.y - this.dragStartWorldY;
+    const deltaPitch = Math.round(deltaY);
 
     // Update note positions visually (doesn't change sequence data yet)
     if (this.noteRenderer) {
       this.noteRenderer.offsetNotes(this.dragNotes, deltaX, deltaY);
       this.onRenderRequest?.();
+    }
+
+    // Audition notes when pitch changes
+    if (this.onNoteAudition && deltaPitch !== this.lastAuditionedDeltaPitch) {
+      this.lastAuditionedDeltaPitch = deltaPitch;
+      const pitches = this.dragNotes.map(n => n.pitch + deltaPitch);
+      this.onNoteAudition(pitches);
     }
 
     this.domElement.style.cursor = 'move';
@@ -681,6 +700,11 @@ export class NoteInteractionController {
   }
 
   private handleDragEnd(_pos: { x: number; y: number }, world: { x: number; y: number }): void {
+    // Stop audition when drag ends
+    if (this.pointerMoved && this.dragNotes.length > 0 && this.onNoteAudition) {
+      this.onNoteAudition([]); // Empty array signals stop
+    }
+
     if (this.pointerMoved && this.dragNotes.length > 0) {
       // Complete drag
       const deltaX = world.x - this.dragStartWorldX;

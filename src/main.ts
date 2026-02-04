@@ -71,6 +71,20 @@ function initApp(): void {
     noteGrid.initBarIndicators(barIndicatorsContainer);
   }
 
+  // Wire note audition during drag
+  let auditioningPitches: number[] = [];
+  noteGrid.setNoteAuditionCallback((pitches: number[]) => {
+    // Stop previously auditioned notes
+    for (const pitch of auditioningPitches) {
+      midiManager?.sendNoteOff(0, pitch);
+    }
+    // Play new notes (pitches already include BASE_MIDI from sequence)
+    for (const pitch of pitches) {
+      midiManager?.sendNoteOn(0, pitch, 100);
+    }
+    auditioningPitches = pitches;
+  });
+
   // Initialize transport controls
   if (transportContainer) {
     transportControls = new TransportControls(transportContainer, playbackEngine, midiManager);

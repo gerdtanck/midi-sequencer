@@ -286,6 +286,17 @@ export class NoteGrid {
   }
 
   /**
+   * Set callback for note audition during drag
+   * Called with array of pitches when notes cross pitch boundaries
+   * Called with empty array when drag ends (to stop audition)
+   */
+  setNoteAuditionCallback(callback: (pitches: number[]) => void): void {
+    if (this.noteInteraction) {
+      this.noteInteraction.setNoteAuditionCallback(callback);
+    }
+  }
+
+  /**
    * Initialize bar indicators overlay
    */
   initBarIndicators(container: HTMLElement): void {
