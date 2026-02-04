@@ -5,6 +5,7 @@ import { GridControls } from './GridControls';
 import { NoteRenderer } from './NoteRenderer';
 import { NoteInteractionController, GridCell } from './NoteInteractionController';
 import { PlaybackIndicator } from './PlaybackIndicator';
+import { LoopMarkersOverlay } from './LoopMarkersOverlay';
 import { PianoKeys } from '../overlays/PianoKeys';
 import { BarIndicators } from '../overlays/BarIndicators';
 import { Sequence } from '@/core/Sequence';
@@ -44,6 +45,7 @@ export class NoteGrid {
   private noteRenderer: NoteRenderer | null = null;
   private noteInteraction: NoteInteractionController | null = null;
   private playbackIndicator: PlaybackIndicator;
+  private loopMarkersOverlay: LoopMarkersOverlay | null = null;
   private pianoKeys: PianoKeys | null = null;
   private barIndicators: BarIndicators | null = null;
 
@@ -179,6 +181,17 @@ export class NoteGrid {
     sequence.onChange(() => {
       this.forceRender();
     });
+
+    // Create loop markers overlay
+    this.loopMarkersOverlay = new LoopMarkersOverlay(
+      this.scene,
+      this.camera,
+      this.renderer.domElement,
+      this.config,
+      sequence
+    );
+    const gridHeight = this.octaveCount * this.config.semitonesPerOctave;
+    this.loopMarkersOverlay.update(gridHeight);
   }
 
   /**
@@ -486,6 +499,11 @@ export class NoteGrid {
       this.barIndicators.setBarCount(this.barCount);
     }
 
+    if (this.loopMarkersOverlay) {
+      const gridHeight = this.octaveCount * this.config.semitonesPerOctave;
+      this.loopMarkersOverlay.update(gridHeight);
+    }
+
     this.updateCameraBounds();
     this.render();
     this.syncOverlayComponents();
@@ -651,6 +669,10 @@ export class NoteGrid {
 
     if (this.barIndicators) {
       this.barIndicators.dispose();
+    }
+
+    if (this.loopMarkersOverlay) {
+      this.loopMarkersOverlay.dispose();
     }
 
     this.inputManager.dispose();
