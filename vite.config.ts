@@ -2,6 +2,8 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig({
+  // Base path for GitHub Pages deployment
+  base: '/midi-sequencer/',
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
