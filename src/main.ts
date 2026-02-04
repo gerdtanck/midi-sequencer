@@ -5,6 +5,7 @@ import { MidiManager } from './midi';
 import { LookaheadScheduler } from './scheduler';
 import { TransportControls } from './ui/controls';
 import { KeyboardShortcuts } from './ui/KeyboardShortcuts';
+import { BASE_MIDI } from './config/GridConfig';
 
 /**
  * Global application state
@@ -56,11 +57,12 @@ function initApp(): void {
     noteGrid.setPianoKeyCallbacks(
       (semitone: number) => {
         // Note On with default velocity 100 on channel 0
-        midiManager?.sendNoteOn(0, semitone, 100);
+        // Add BASE_MIDI to convert grid row to actual MIDI note
+        midiManager?.sendNoteOn(0, BASE_MIDI + semitone, 100);
       },
       (semitone: number) => {
         // Note Off on channel 0
-        midiManager?.sendNoteOff(0, semitone);
+        midiManager?.sendNoteOff(0, BASE_MIDI + semitone);
       }
     );
   }
