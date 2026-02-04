@@ -1,7 +1,15 @@
 import * as THREE from 'three';
 import { Sequence } from '@/core/Sequence';
 import { SelectionManager } from '@/core/SelectionManager';
-import { GridConfig, BASE_MIDI } from '@/config/GridConfig';
+import {
+  GridConfig,
+  BASE_MIDI,
+  NOTE_COLOR,
+  NOTE_SELECTED_COLOR,
+  HANDLE_COLOR,
+  NOTE_Z_POSITION,
+  HANDLE_Z_POSITION,
+} from '@/config/GridConfig';
 import { isTouchDevice } from '@/utils';
 
 /**
@@ -30,12 +38,12 @@ export class NoteRenderer {
   // Selection manager reference
   private selectionManager: SelectionManager | null = null;
 
-  // Note rendering settings
-  private noteColor = 0xe94560;
-  private noteSelectedColor = 0x4a9eff; // Blue for selected notes
-  private handleColor = 0xffffff;
-  private noteZPosition = 0.5; // In front of grid lines
-  private handleZPosition = 0.6; // In front of notes
+  // Note rendering settings (using config constants)
+  private noteColor = NOTE_COLOR;
+  private noteSelectedColor = NOTE_SELECTED_COLOR;
+  private handleColor = HANDLE_COLOR;
+  private noteZPosition = NOTE_Z_POSITION;
+  private handleZPosition = HANDLE_Z_POSITION;
 
   // Note mesh storage
   private noteMeshes: Map<string, THREE.Mesh> = new Map();

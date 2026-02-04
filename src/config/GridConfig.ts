@@ -26,6 +26,42 @@ export const MAX_MIDI = BASE_MIDI + (MAX_OCTAVES * SEMITONES_PER_OCTAVE) - 1;
 // Line width scale factor (CSS width of 1 = 0.02 world units)
 export const LINE_WIDTH_SCALE = 0.02;
 
+// ============ Interaction Thresholds ============
+
+// Mouse/touch thresholds
+export const CLICK_THRESHOLD_PX = 5;           // Max movement to count as click (not drag)
+export const DOUBLE_TAP_THRESHOLD_MS = 300;    // Max time between taps for double-tap
+export const LONG_PRESS_DURATION_MS = 400;     // Hold duration to trigger long-press
+
+// Note resize handle
+export const HANDLE_ZONE_WIDTH = 0.33;         // Width of resize handle hit zone (world units)
+
+// ============ Note Properties ============
+
+// Duration limits
+export const MIN_NOTE_DURATION = 0.1;          // Minimum note duration (fraction of step)
+export const MAX_NOTE_DURATION = 8.0;          // Maximum note duration (steps)
+export const DEFAULT_NOTE_DURATION = 0.8;      // Default duration for new notes
+
+// Velocity
+export const DEFAULT_NOTE_VELOCITY = 100;      // Default velocity (0-127)
+
+// ============ Visual Constants ============
+
+// Note colors (hex)
+export const NOTE_COLOR = 0xe94560;            // Default note color (red/pink)
+export const NOTE_SELECTED_COLOR = 0x4a9eff;   // Selected note color (blue)
+export const HANDLE_COLOR = 0xffffff;          // Resize handle color (white)
+
+// Z-positions (layering order)
+export const NOTE_Z_POSITION = 0.5;            // Notes in front of grid lines
+export const HANDLE_Z_POSITION = 0.6;          // Handles in front of notes
+export const SELECTION_RECT_Z_POSITION = 2.0;  // Selection rectangle on top
+
+// Selection rectangle
+export const SELECTION_RECT_COLOR = 0x4a9eff;  // Selection rectangle color
+export const SELECTION_RECT_OPACITY = 0.3;     // Selection rectangle transparency
+
 /**
  * Grid configuration interface
  */

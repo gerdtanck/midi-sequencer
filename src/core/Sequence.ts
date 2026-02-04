@@ -1,5 +1,10 @@
 import type { Note, LoopMarkers, SequenceChangeListener } from './types';
-import { STEPS_PER_BAR, DEFAULT_BARS } from '@/config/GridConfig';
+import {
+  STEPS_PER_BAR,
+  DEFAULT_BARS,
+  DEFAULT_NOTE_VELOCITY,
+  DEFAULT_NOTE_DURATION,
+} from '@/config/GridConfig';
 
 /**
  * Manages a step sequence with sparse note storage
@@ -65,8 +70,8 @@ export class Sequence {
   toggleNote(
     step: number,
     pitch: number,
-    velocity: number = 100,
-    duration: number = 0.8
+    velocity: number = DEFAULT_NOTE_VELOCITY,
+    duration: number = DEFAULT_NOTE_DURATION
   ): boolean {
     const notesAtStep = this.notes.get(step) || [];
 
@@ -105,7 +110,7 @@ export class Sequence {
   /**
    * Add a note at a specific step and pitch (without toggle)
    */
-  addNote(step: number, pitch: number, velocity: number = 100, duration: number = 0.8): void {
+  addNote(step: number, pitch: number, velocity: number = DEFAULT_NOTE_VELOCITY, duration: number = DEFAULT_NOTE_DURATION): void {
     const notesAtStep = this.notes.get(step) || [];
 
     // Check if note already exists

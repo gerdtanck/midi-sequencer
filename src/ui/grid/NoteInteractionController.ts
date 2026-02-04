@@ -1,5 +1,16 @@
 import * as THREE from 'three';
-import { GridConfig } from '@/config/GridConfig';
+import {
+  GridConfig,
+  CLICK_THRESHOLD_PX,
+  DOUBLE_TAP_THRESHOLD_MS,
+  LONG_PRESS_DURATION_MS,
+  HANDLE_ZONE_WIDTH,
+  MIN_NOTE_DURATION,
+  MAX_NOTE_DURATION,
+  SELECTION_RECT_COLOR,
+  SELECTION_RECT_OPACITY,
+  SELECTION_RECT_Z_POSITION,
+} from '@/config/GridConfig';
 import type { NoteRenderer } from './NoteRenderer';
 import type { SelectionManager } from '@/core/SelectionManager';
 import {
@@ -67,16 +78,6 @@ export class NoteInteractionController {
 
   // Device type
   private isMobile: boolean;
-
-  // Thresholds
-  private static readonly CLICK_THRESHOLD = 5; // pixels
-  private static readonly DOUBLE_TAP_THRESHOLD = 300; // ms
-  private static readonly LONG_PRESS_DURATION = 400; // ms
-  private static readonly HANDLE_ZONE_WIDTH = 0.33;
-
-  // Duration limits for resize
-  private static readonly MIN_DURATION = 0.1;
-  private static readonly MAX_DURATION = 8.0;
 
   // Current interaction mode
   private mode: InteractionMode = 'none';
@@ -284,7 +285,7 @@ export class NoteInteractionController {
     const noteAtPos = this.noteRenderer?.getNoteAtWorld(
       world.x,
       world.y,
-      this.isMobile ? 0 : NoteInteractionController.HANDLE_ZONE_WIDTH
+      this.isMobile ? 0 : HANDLE_ZONE_WIDTH
     ) ?? null;
 
     if (this.isMobile) {
@@ -351,7 +352,7 @@ export class NoteInteractionController {
     // Check for double-tap
     const now = Date.now();
     const isDoubleTap =
-      now - this.lastTapTime < NoteInteractionController.DOUBLE_TAP_THRESHOLD &&
+      now - this.lastTapTime < DOUBLE_TAP_THRESHOLD_MS &&
       this.lastTapPos &&
       Math.abs(pos.x - this.lastTapPos.x) < 30 &&
       Math.abs(pos.y - this.lastTapPos.y) < 30;
@@ -385,19 +386,19 @@ export class NoteInteractionController {
       // Start long-press timer for resize
       this.longPressTimer = window.setTimeout(() => {
         this.handleLongPressOnNote(noteAtPos);
-      }, NoteInteractionController.LONG_PRESS_DURATION);
+      }, LONG_PRESS_DURATION_MS);
     } else {
       // Empty grid
       if (this.selectionManager?.hasSelection) {
         // Long-press will paste
         this.longPressTimer = window.setTimeout(() => {
           this.handleLongPressPaste(world);
-        }, NoteInteractionController.LONG_PRESS_DURATION);
+        }, LONG_PRESS_DURATION_MS);
       } else {
         // Long-press will start selection rectangle
         this.longPressTimer = window.setTimeout(() => {
           this.handleLongPressSelectionRect(world);
-        }, NoteInteractionController.LONG_PRESS_DURATION);
+        }, LONG_PRESS_DURATION_MS);
       }
     }
   }
@@ -489,7 +490,7 @@ export class NoteInteractionController {
         this.pendingTapAction = null;
       }
       this.pendingTapTimer = null;
-    }, NoteInteractionController.DOUBLE_TAP_THRESHOLD);
+    }, DOUBLE_TAP_THRESHOLD_MS);
   }
 
   // ============ Selection Rectangle ============
@@ -499,14 +500,14 @@ export class NoteInteractionController {
 
     const geometry = new THREE.PlaneGeometry(1, 1);
     const material = new THREE.MeshBasicMaterial({
-      color: 0x4a9eff,
+      color: SELECTION_RECT_COLOR,
       transparent: true,
-      opacity: 0.3,
+      opacity: SELECTION_RECT_OPACITY,
       side: THREE.DoubleSide,
     });
 
     this.selectRectMesh = new THREE.Mesh(geometry, material);
-    this.selectRectMesh.position.z = 2;
+    this.selectRectMesh.position.z = SELECTION_RECT_Z_POSITION;
     this.scene.add(this.selectRectMesh);
   }
 
@@ -550,7 +551,7 @@ export class NoteInteractionController {
     const dy = pos.y - this.pointerStartY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    if (distance > NoteInteractionController.CLICK_THRESHOLD) {
+    if (distance > CLICK_THRESHOLD_PX) {
       this.pointerMoved = true;
       if (!this.longPressTriggered) {
         this.clearLongPressTimer();
@@ -581,8 +582,8 @@ export class NoteInteractionController {
     const deltaX = world.x - this.resizeStartWorldX;
     let newDuration = this.resizeNote.startDuration + deltaX;
     newDuration = Math.max(
-      NoteInteractionController.MIN_DURATION,
-      Math.min(NoteInteractionController.MAX_DURATION, newDuration)
+      MIN_NOTE_DURATION,
+      Math.min(MAX_NOTE_DURATION, newDuration)
     );
 
     if (this.noteRenderer) {
@@ -660,8 +661,8 @@ export class NoteInteractionController {
     const deltaX = world.x - this.resizeStartWorldX;
     let newDuration = this.resizeNote.startDuration + deltaX;
     newDuration = Math.max(
-      NoteInteractionController.MIN_DURATION,
-      Math.min(NoteInteractionController.MAX_DURATION, newDuration)
+      MIN_NOTE_DURATION,
+      Math.min(MAX_NOTE_DURATION, newDuration)
     );
 
     if (this.onNoteResize) {
