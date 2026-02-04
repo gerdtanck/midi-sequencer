@@ -1,12 +1,20 @@
 import * as THREE from 'three';
 import { GridConfig, GridLineStyles, LineStyle, loadLineStyles, LINE_WIDTH_SCALE } from '@/config/GridConfig';
 
+// Black key semitone positions within each octave (C#, D#, F#, G#, A#)
+const BLACK_KEY_SEMITONES = [1, 3, 6, 8, 10];
+
+// Row background colors
+const WHITE_KEY_COLOR = 0x1a1a2e; // Slightly lighter than background
+const BLACK_KEY_COLOR = 0x12121f; // Darker for black keys
+
 /**
  * GridLines - Handles rendering of grid lines for the note grid
  *
  * Renders five types of lines as quads (rectangles) for proper thickness:
  * - Vertical: bar lines, quarter lines, step lines
  * - Horizontal: octave lines, semitone lines
+ * Also renders row backgrounds to distinguish white/black piano keys.
  */
 export class GridLines {
   private scene: THREE.Scene;
@@ -36,6 +44,9 @@ export class GridLines {
 
     const totalSteps = barCount * this.config.stepsPerBar;
     const totalSemitones = octaveCount * this.config.semitonesPerOctave;
+
+    // Create row backgrounds first (behind everything)
+    this.createRowBackgrounds(totalSteps, totalSemitones);
 
     // Create vertical lines (time divisions) - rendered back to front for proper z-ordering
     this.createVerticalLines(totalSteps, totalSemitones);
@@ -86,6 +97,88 @@ export class GridLines {
     // Create quads in order: semitone (back), octave (front)
     this.createQuadSet(semitonePositions, totalSteps, false, this.styles.semitoneLine, 0.05);
     this.createQuadSet(octavePositions, totalSteps, false, this.styles.octaveLine, 0.15);
+  }
+
+  /**
+   * Creates row background quads to distinguish white/black piano keys
+   */
+  private createRowBackgrounds(totalSteps: number, totalSemitones: number): void {
+    const whiteKeyRows: number[] = [];
+    const blackKeyRows: number[] = [];
+
+    for (let semitone = 0; semitone < totalSemitones; semitone++) {
+      const semitoneInOctave = semitone % this.config.semitonesPerOctave;
+      if (BLACK_KEY_SEMITONES.includes(semitoneInOctave)) {
+        blackKeyRows.push(semitone);
+      } else {
+        whiteKeyRows.push(semitone);
+      }
+    }
+
+    // Create background quads behind everything (z = -0.1)
+    this.createRowQuads(whiteKeyRows, totalSteps, WHITE_KEY_COLOR, -0.1);
+    this.createRowQuads(blackKeyRows, totalSteps, BLACK_KEY_COLOR, -0.1);
+  }
+
+  /**
+   * Creates a set of row background quads
+   */
+  private createRowQuads(
+    rows: number[],
+    width: number,
+    color: number,
+    zPosition: number
+  ): void {
+    if (rows.length === 0) return;
+
+    const numQuads = rows.length;
+    const vertices = new Float32Array(numQuads * 4 * 3);
+    const indices = new Uint32Array(numQuads * 6);
+
+    for (let i = 0; i < numQuads; i++) {
+      const row = rows[i];
+      const vertexOffset = i * 12;
+      const indexOffset = i * 6;
+      const vertexIndex = i * 4;
+
+      // Full-width quad for the row (y from row to row+1)
+      vertices[vertexOffset + 0] = 0;
+      vertices[vertexOffset + 1] = row;
+      vertices[vertexOffset + 2] = zPosition;
+
+      vertices[vertexOffset + 3] = width;
+      vertices[vertexOffset + 4] = row;
+      vertices[vertexOffset + 5] = zPosition;
+
+      vertices[vertexOffset + 6] = width;
+      vertices[vertexOffset + 7] = row + 1;
+      vertices[vertexOffset + 8] = zPosition;
+
+      vertices[vertexOffset + 9] = 0;
+      vertices[vertexOffset + 10] = row + 1;
+      vertices[vertexOffset + 11] = zPosition;
+
+      // Two triangles: (0,1,2) and (0,2,3)
+      indices[indexOffset + 0] = vertexIndex + 0;
+      indices[indexOffset + 1] = vertexIndex + 1;
+      indices[indexOffset + 2] = vertexIndex + 2;
+      indices[indexOffset + 3] = vertexIndex + 0;
+      indices[indexOffset + 4] = vertexIndex + 2;
+      indices[indexOffset + 5] = vertexIndex + 3;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+
+    const material = new THREE.MeshBasicMaterial({
+      color: color,
+      side: THREE.DoubleSide,
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    this.gridGroup.add(mesh);
+    this.meshes.push(mesh);
   }
 
   /**
