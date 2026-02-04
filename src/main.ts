@@ -80,6 +80,7 @@ function initApp(): void {
   keyboardShortcuts.setPlaybackStateCallback((isPlaying: boolean) => {
     transportControls?.updatePlayButton(isPlaying);
   });
+  keyboardShortcuts.setNoteGrid(noteGrid);
 
   // Wire playback position to grid indicator
   playbackEngine.setPositionCallback((step: number) => {

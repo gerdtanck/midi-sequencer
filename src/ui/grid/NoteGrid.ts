@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GridConfig, CameraState, DEFAULT_GRID_CONFIG } from '@/config/GridConfig';
+import { GridConfig, CameraState, DEFAULT_GRID_CONFIG, DEFAULT_NOTE_VELOCITY, DEFAULT_NOTE_DURATION } from '@/config/GridConfig';
 import { GridLines } from './GridLines';
 import { GridControls } from './GridControls';
 import { NoteRenderer } from './NoteRenderer';
@@ -10,6 +10,14 @@ import { BarIndicators } from '../overlays/BarIndicators';
 import { Sequence } from '@/core/Sequence';
 import { SelectionManager } from '@/core/SelectionManager';
 import { InputManager } from '../input';
+import {
+  CommandHistory,
+  AddNoteCommand,
+  RemoveNoteCommand,
+  MoveNotesCommand,
+  ResizeNoteCommand,
+  PasteNotesCommand,
+} from '@/core/commands';
 
 /**
  * NoteGrid - Main grid class for the MIDI sequencer note grid
@@ -44,6 +52,9 @@ export class NoteGrid {
 
   // Selection manager
   private selectionManager: SelectionManager | null = null;
+
+  // Command history for undo/redo
+  private commandHistory: CommandHistory = new CommandHistory();
 
   // Input manager for unified event handling
   private inputManager: InputManager;
@@ -173,14 +184,29 @@ export class NoteGrid {
   private onNoteToggle(cell: GridCell): void {
     if (!this.sequence) return;
 
-    const added = this.sequence.toggleNote(cell.step, cell.pitch);
+    const existingNote = this.sequence.getNoteAt(cell.step, cell.pitch);
 
-    // If note was removed, also remove from selection
-    if (!added && this.selectionManager) {
-      this.selectionManager.deselect(cell.step, cell.pitch);
+    if (existingNote) {
+      // Remove existing note
+      const command = new RemoveNoteCommand(this.sequence, cell.step, cell.pitch, existingNote);
+      this.commandHistory.execute(command);
+
+      // Also remove from selection
+      if (this.selectionManager) {
+        this.selectionManager.deselect(cell.step, cell.pitch);
+      }
+    } else {
+      // Add new note
+      const command = new AddNoteCommand(
+        this.sequence,
+        cell.step,
+        cell.pitch,
+        DEFAULT_NOTE_VELOCITY,
+        DEFAULT_NOTE_DURATION
+      );
+      this.commandHistory.execute(command);
     }
 
-    console.log(`Note ${added ? 'added' : 'removed'} at step ${cell.step}, pitch ${cell.pitch}`);
     this.forceRender();
   }
 
@@ -190,8 +216,11 @@ export class NoteGrid {
   private onNoteResize(step: number, pitch: number, newDuration: number): void {
     if (!this.sequence) return;
 
-    this.sequence.updateNote(step, pitch, { duration: newDuration });
-    console.log(`Note resized at step ${step}, pitch ${pitch}, duration ${newDuration.toFixed(2)}`);
+    const note = this.sequence.getNoteAt(step, pitch);
+    if (!note) return;
+
+    const command = new ResizeNoteCommand(this.sequence, step, pitch, note.duration, newDuration);
+    this.commandHistory.execute(command);
     this.forceRender();
   }
 
@@ -203,17 +232,16 @@ export class NoteGrid {
     deltaStep: number,
     deltaPitch: number
   ): void {
-    if (!this.sequence || !this.selectionManager) return;
+    if (!this.sequence) return;
 
-    // Move notes in the sequence
-    const moved = this.sequence.moveNotes(notes, deltaStep, deltaPitch);
-
-    // Update selection to track moved notes
-    for (const { oldStep, oldPitch, newStep, newPitch } of moved) {
-      this.selectionManager.moveNote(oldStep, oldPitch, newStep, newPitch);
-    }
-
-    console.log(`Moved ${moved.length} note(s) by delta (${deltaStep.toFixed(2)}, ${deltaPitch})`);
+    const command = new MoveNotesCommand(
+      this.sequence,
+      this.selectionManager,
+      notes,
+      deltaStep,
+      deltaPitch
+    );
+    this.commandHistory.execute(command);
     this.forceRender();
   }
 
@@ -226,15 +254,14 @@ export class NoteGrid {
     const selectedNotes = this.selectionManager.getSelectedNotes();
     if (selectedNotes.length === 0) return;
 
-    // Copy notes to the target position
-    const created = this.sequence.copyNotes(selectedNotes, targetStep, targetPitch);
-
-    // Update selection to the newly pasted notes
-    if (created.length > 0) {
-      this.selectionManager.setSelection(created);
-    }
-
-    console.log(`Pasted ${created.length} note(s) at step ${targetStep}, pitch ${targetPitch}`);
+    const command = new PasteNotesCommand(
+      this.sequence,
+      this.selectionManager,
+      selectedNotes,
+      targetStep,
+      targetPitch
+    );
+    this.commandHistory.execute(command);
     this.forceRender();
   }
 
@@ -514,6 +541,55 @@ export class NoteGrid {
    */
   getConfig(): GridConfig {
     return this.config;
+  }
+
+  // ============ Undo/Redo ============
+
+  /**
+   * Undo the last action
+   * @returns true if an action was undone
+   */
+  undo(): boolean {
+    const command = this.commandHistory.undo();
+    if (command) {
+      this.forceRender();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Redo the last undone action
+   * @returns true if an action was redone
+   */
+  redo(): boolean {
+    const command = this.commandHistory.redo();
+    if (command) {
+      this.forceRender();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Check if undo is available
+   */
+  canUndo(): boolean {
+    return this.commandHistory.canUndo();
+  }
+
+  /**
+   * Check if redo is available
+   */
+  canRedo(): boolean {
+    return this.commandHistory.canRedo();
+  }
+
+  /**
+   * Get the command history (for UI integration)
+   */
+  getCommandHistory(): CommandHistory {
+    return this.commandHistory;
   }
 
   /**

@@ -1,5 +1,6 @@
 import type { PlaybackEngine } from '@/core/PlaybackEngine';
 import type { MidiManager } from '@/midi/MidiManager';
+import type { NoteGrid } from './grid/NoteGrid';
 
 /**
  * KeyboardShortcuts - Handles global keyboard shortcuts for the sequencer
@@ -8,10 +9,13 @@ import type { MidiManager } from '@/midi/MidiManager';
  * - Space: Toggle play/stop
  * - Escape: Stop playback
  * - P: Panic (all notes off)
+ * - Ctrl+Z: Undo
+ * - Ctrl+Y / Ctrl+Shift+Z: Redo
  */
 export class KeyboardShortcuts {
   private playbackEngine: PlaybackEngine;
   private midiManager: MidiManager;
+  private noteGrid: NoteGrid | null = null;
   private boundOnKeyDown: (e: KeyboardEvent) => void;
 
   // Callback to update UI when playback state changes
@@ -23,6 +27,13 @@ export class KeyboardShortcuts {
 
     this.boundOnKeyDown = this.onKeyDown.bind(this);
     window.addEventListener('keydown', this.boundOnKeyDown);
+  }
+
+  /**
+   * Set the note grid for undo/redo support
+   */
+  setNoteGrid(noteGrid: NoteGrid): void {
+    this.noteGrid = noteGrid;
   }
 
   /**
@@ -42,6 +53,29 @@ export class KeyboardShortcuts {
       return;
     }
 
+    // Handle Ctrl/Cmd+key shortcuts
+    if (event.ctrlKey || event.metaKey) {
+      switch (event.code) {
+        case 'KeyZ':
+          event.preventDefault();
+          if (event.shiftKey) {
+            // Ctrl+Shift+Z = Redo
+            this.redo();
+          } else {
+            // Ctrl+Z = Undo
+            this.undo();
+          }
+          return;
+
+        case 'KeyY':
+          // Ctrl+Y = Redo
+          event.preventDefault();
+          this.redo();
+          return;
+      }
+    }
+
+    // Handle non-modifier shortcuts
     switch (event.code) {
       case 'Space':
         event.preventDefault();
@@ -54,7 +88,7 @@ export class KeyboardShortcuts {
         break;
 
       case 'KeyP':
-        // P for Panic
+        // P for Panic (only without modifiers)
         if (!event.ctrlKey && !event.metaKey) {
           event.preventDefault();
           this.panic();
@@ -94,6 +128,24 @@ export class KeyboardShortcuts {
     this.midiManager.panic();
     this.onPlaybackStateChange?.(false);
     console.log('Panic triggered via keyboard');
+  }
+
+  /**
+   * Undo last action
+   */
+  private undo(): void {
+    if (this.noteGrid?.undo()) {
+      console.log('Undo');
+    }
+  }
+
+  /**
+   * Redo last undone action
+   */
+  private redo(): void {
+    if (this.noteGrid?.redo()) {
+      console.log('Redo');
+    }
   }
 
   /**
