@@ -190,6 +190,9 @@ export class NoteGrid {
       this.config,
       sequence
     );
+    this.loopMarkersOverlay.setCancelPanCallback(() => {
+      this.gridControls.cancelPan();
+    });
     const gridHeight = this.octaveCount * this.config.semitonesPerOctave;
     this.loopMarkersOverlay.update(gridHeight);
   }

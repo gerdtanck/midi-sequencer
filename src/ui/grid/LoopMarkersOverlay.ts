@@ -42,8 +42,9 @@ export class LoopMarkersOverlay {
   private boundOnPointerMove: (e: MouseEvent | TouchEvent) => void;
   private boundOnPointerUp: (e: MouseEvent | TouchEvent) => void;
 
-  // Change callback
+  // Callbacks
   private onChange: LoopMarkersChangeCallback | null = null;
+  private onCancelPan: (() => void) | null = null;
 
   constructor(
     scene: THREE.Scene,
@@ -71,6 +72,13 @@ export class LoopMarkersOverlay {
    */
   setChangeCallback(callback: LoopMarkersChangeCallback): void {
     this.onChange = callback;
+  }
+
+  /**
+   * Set callback to cancel panning (prevents conflict with grid pan)
+   */
+  setCancelPanCallback(callback: () => void): void {
+    this.onCancelPan = callback;
   }
 
   /**
@@ -132,6 +140,7 @@ export class LoopMarkersOverlay {
     document.addEventListener('touchmove', this.boundOnPointerMove, { passive: false });
     document.addEventListener('mouseup', this.boundOnPointerUp);
     document.addEventListener('touchend', this.boundOnPointerUp);
+    document.addEventListener('touchcancel', this.boundOnPointerUp);
   }
 
   /**
@@ -144,18 +153,24 @@ export class LoopMarkersOverlay {
     document.removeEventListener('touchmove', this.boundOnPointerMove);
     document.removeEventListener('mouseup', this.boundOnPointerUp);
     document.removeEventListener('touchend', this.boundOnPointerUp);
+    document.removeEventListener('touchcancel', this.boundOnPointerUp);
   }
 
   /**
    * Get pointer position from event
    */
-  private getPointerPos(e: MouseEvent | TouchEvent): { x: number; y: number } {
-    if ('touches' in e && e.touches.length > 0) {
-      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  private getPointerPos(e: MouseEvent | TouchEvent): { x: number; y: number } | null {
+    if ('touches' in e) {
+      // For touchmove, use touches; for touchend, use changedTouches
+      const touch = e.touches[0] || e.changedTouches?.[0];
+      if (touch) {
+        return { x: touch.clientX, y: touch.clientY };
+      }
+      return null;
     } else if ('clientX' in e) {
       return { x: e.clientX, y: e.clientY };
     }
-    return { x: 0, y: 0 };
+    return null;
   }
 
   /**
@@ -170,25 +185,29 @@ export class LoopMarkersOverlay {
    */
   private onPointerDown(e: MouseEvent | TouchEvent): void {
     const pos = this.getPointerPos(e);
+    if (!pos) return;
+
     const world = this.toWorld(pos.x, pos.y);
     const markers = this.sequence.getLoopMarkers();
 
-    // Check if near start marker
-    if (Math.abs(world.x - markers.start) < this.dragThreshold) {
-      this.isDragging = 'start';
-      e.preventDefault();
-      e.stopPropagation();
-      this.domElement.style.cursor = 'ew-resize';
-      return;
-    }
+    const distToStart = Math.abs(world.x - markers.start);
+    const distToEnd = Math.abs(world.x - markers.end);
 
-    // Check if near end marker
-    if (Math.abs(world.x - markers.end) < this.dragThreshold) {
-      this.isDragging = 'end';
-      e.preventDefault();
-      e.stopPropagation();
-      this.domElement.style.cursor = 'ew-resize';
-      return;
+    // Check which marker is closer (if both within threshold)
+    if (distToStart < this.dragThreshold || distToEnd < this.dragThreshold) {
+      // Pick the closer one
+      if (distToStart <= distToEnd && distToStart < this.dragThreshold) {
+        this.isDragging = 'start';
+      } else if (distToEnd < this.dragThreshold) {
+        this.isDragging = 'end';
+      }
+
+      if (this.isDragging) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.onCancelPan?.(); // Cancel any ongoing pan
+        this.domElement.style.cursor = 'ew-resize';
+      }
     }
   }
 
@@ -199,9 +218,14 @@ export class LoopMarkersOverlay {
     if (!this.isDragging) return;
 
     e.preventDefault();
+    e.stopPropagation();
 
     const pos = this.getPointerPos(e);
+    if (!pos) return;
+
     const world = this.toWorld(pos.x, pos.y);
+
+    // Get fresh marker values
     const markers = this.sequence.getLoopMarkers();
 
     // Snap to step
@@ -211,7 +235,7 @@ export class LoopMarkersOverlay {
     const minLoopLength = 1;
 
     if (this.isDragging === 'start') {
-      // Clamp start marker
+      // Clamp start marker: >= 0 and < end
       const newStart = Math.max(0, Math.min(snappedStep, markers.end - minLoopLength));
       if (newStart !== markers.start) {
         this.sequence.setLoopMarkers({ start: newStart, end: markers.end });
@@ -219,7 +243,7 @@ export class LoopMarkersOverlay {
         this.onChange?.(newStart, markers.end);
       }
     } else if (this.isDragging === 'end') {
-      // Clamp end marker
+      // Clamp end marker: > start and <= max
       const maxEnd = this.config.stepsPerBar * 128; // Max supported bars
       const newEnd = Math.max(markers.start + minLoopLength, Math.min(snappedStep, maxEnd));
       if (newEnd !== markers.end) {
