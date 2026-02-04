@@ -402,6 +402,53 @@ export class NoteRenderer {
   }
 
   /**
+   * Temporarily offset notes visually during drag (doesn't modify sequence data)
+   * @param notes Notes to offset
+   * @param deltaStep Horizontal offset in steps
+   * @param deltaPitch Vertical offset in semitones
+   */
+  offsetNotes(
+    notes: Array<{ step: number; pitch: number }>,
+    deltaStep: number,
+    deltaPitch: number
+  ): void {
+    for (const { step, pitch } of notes) {
+      const key = this.getNoteKey(step, pitch);
+      const mesh = this.noteMeshes.get(key);
+      if (!mesh) continue;
+
+      const data = mesh.userData as NoteMeshData;
+      const semitone = data.pitch - BASE_MIDI;
+
+      // Calculate original position
+      const noteWidth = data.duration * 0.95;
+      const originalX = data.step + noteWidth / 2 + 0.025;
+      const originalY = semitone + 0.5;
+
+      // Apply offset
+      mesh.position.x = originalX + deltaStep;
+      mesh.position.y = originalY + deltaPitch;
+
+      // Also offset handle (PC only)
+      const handle = this.handleMeshes.get(key);
+      if (handle) {
+        const handleWidth = 0.08;
+        const originalHandleX = data.step + noteWidth + 0.025 - handleWidth / 2;
+        handle.position.x = originalHandleX + deltaStep;
+        handle.position.y = originalY + deltaPitch;
+      }
+    }
+  }
+
+  /**
+   * Reset all note positions to their original locations
+   * Called after drag ends (whether committed or cancelled)
+   */
+  resetNoteOffsets(): void {
+    this.renderAllNotes();
+  }
+
+  /**
    * Get all notes that intersect with a rectangular region
    * Used for selection rectangle
    */

@@ -596,15 +596,23 @@ export class NoteInteractionController {
     }
   }
 
-  private handleDragMove(e: MouseEvent | TouchEvent, _world: { x: number; y: number }): void {
+  private handleDragMove(e: MouseEvent | TouchEvent, world: { x: number; y: number }): void {
     if (this.dragNotes.length === 0 || !this.pointerMoved) return;
 
     e.preventDefault();
     e.stopPropagation();
     this.onCancelPan?.();
 
-    // Visual feedback during drag would require temporary mesh updates
-    // For now, we'll just change cursor and update on release
+    // Calculate delta from drag start
+    const deltaX = world.x - this.dragStartWorldX;
+    const deltaY = world.y - this.dragStartWorldY;
+
+    // Update note positions visually (doesn't change sequence data yet)
+    if (this.noteRenderer) {
+      this.noteRenderer.offsetNotes(this.dragNotes, deltaX, deltaY);
+      this.onRenderRequest?.();
+    }
+
     this.domElement.style.cursor = 'move';
   }
 
@@ -669,7 +677,7 @@ export class NoteInteractionController {
       this.onNoteResize(this.resizeNote.step, this.resizeNote.pitch, newDuration);
     }
 
-    this.domElement.style.cursor = 'grab';
+    this.domElement.style.cursor = 'pointer';
   }
 
   private handleDragEnd(_pos: { x: number; y: number }, world: { x: number; y: number }): void {
@@ -683,9 +691,13 @@ export class NoteInteractionController {
 
       if (this.onNoteMove && (Math.abs(deltaX) > 0.01 || deltaPitch !== 0)) {
         this.onNoteMove(this.dragNotes, deltaX, deltaPitch);
+      } else {
+        // Move wasn't large enough - reset visual positions
+        this.noteRenderer?.resetNoteOffsets();
+        this.onRenderRequest?.();
       }
 
-      this.domElement.style.cursor = 'grab';
+      this.domElement.style.cursor = 'pointer';
     } else if (!this.pointerMoved && !this.longPressTriggered) {
       // Was a click, not a drag
       if (this.isMobile) {

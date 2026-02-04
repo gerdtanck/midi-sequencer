@@ -299,7 +299,7 @@ export class GridControls implements InputHandler {
    */
   onPointerUp(_e: NormalizedPointerEvent): void {
     this.isPanning = false;
-    this.domElement.style.cursor = 'grab';
+    this.domElement.style.cursor = 'pointer';
   }
 
   /**
@@ -490,7 +490,7 @@ export class GridControls implements InputHandler {
     this.isPanning = false;
     this.touches.clear();
     this.gestureType = null;
-    this.domElement.style.cursor = 'grab';
+    this.domElement.style.cursor = 'pointer';
   }
 
   /**

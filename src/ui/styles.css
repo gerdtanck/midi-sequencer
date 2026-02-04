@@ -111,7 +111,7 @@ body {
 
 #note-grid-container canvas {
   display: block;
-  cursor: grab;
+  cursor: pointer;
   touch-action: none;
 }
 
