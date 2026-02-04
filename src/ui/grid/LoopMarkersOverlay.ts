@@ -36,6 +36,8 @@ export class LoopMarkersOverlay {
   // Drag state
   private isDragging: 'start' | 'end' | null = null;
   private dragThreshold = 0.5; // World units to detect marker hit
+  private dragStartX = 0; // Track start position to detect real movement
+  private hasDragMoved = false; // Only update marker if actually dragged
 
   // Bound event handlers
   private boundOnPointerDown: (e: MouseEvent | TouchEvent) => void;
@@ -207,6 +209,8 @@ export class LoopMarkersOverlay {
         e.stopPropagation();
         this.onCancelPan?.(); // Cancel any ongoing pan
         this.domElement.style.cursor = 'ew-resize';
+        this.dragStartX = world.x;
+        this.hasDragMoved = false;
       }
     }
   }
@@ -224,6 +228,14 @@ export class LoopMarkersOverlay {
     if (!pos) return;
 
     const world = this.toWorld(pos.x, pos.y);
+
+    // Require minimum movement before considering it a real drag
+    // This prevents accidental marker moves when tapping near a marker
+    const moveThreshold = 0.3;
+    if (!this.hasDragMoved && Math.abs(world.x - this.dragStartX) < moveThreshold) {
+      return;
+    }
+    this.hasDragMoved = true;
 
     // Get fresh marker values
     const markers = this.sequence.getLoopMarkers();
