@@ -36,7 +36,6 @@ export class LoopMarkersOverlay {
   // Drag state
   private isDragging: 'start' | 'end' | null = null;
   private dragThreshold = 0.5; // World units to detect marker hit
-  private lastDragEndTime = 0; // Timestamp to ignore synthetic events after drag
 
   // Bound event handlers
   private boundOnPointerDown: (e: MouseEvent | TouchEvent) => void;
@@ -185,11 +184,6 @@ export class LoopMarkersOverlay {
    * Handle pointer down
    */
   private onPointerDown(e: MouseEvent | TouchEvent): void {
-    // Ignore synthetic events that fire shortly after a drag ended (mobile compatibility)
-    if (Date.now() - this.lastDragEndTime < 100) {
-      return;
-    }
-
     const pos = this.getPointerPos(e);
     if (!pos) return;
 
@@ -266,7 +260,6 @@ export class LoopMarkersOverlay {
   private onPointerUp(_e: MouseEvent | TouchEvent): void {
     if (this.isDragging) {
       this.isDragging = null;
-      this.lastDragEndTime = Date.now(); // Track when drag ended to ignore synthetic events
       this.domElement.style.cursor = 'pointer';
     }
   }
