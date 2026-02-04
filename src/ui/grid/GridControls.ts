@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GridConfig, CameraState } from '@/config/GridConfig';
 import { screenToWorld as screenToWorldUtil } from '@/utils';
+import type { NormalizedPointerEvent, InputHandler } from '../input';
 
 interface TouchInfo {
   startX: number;
@@ -12,10 +13,16 @@ interface TouchInfo {
 /**
  * GridControls - Handles pan and zoom interactions for the note grid
  *
+ * Implements InputHandler for mouse interactions while keeping
+ * direct touch event handling for pinch-zoom (multi-touch).
+ *
  * Supports mouse (PC) and touch (mobile) input for panning and zooming.
  * View is bounded to grid edges with no empty space visible beyond boundaries.
  */
-export class GridControls {
+export class GridControls implements InputHandler {
+  // InputHandler properties
+  readonly priority = 100; // Low priority - pan is fallback after note interactions
+  readonly name = 'GridControls';
   private camera: THREE.OrthographicCamera;
   private domElement: HTMLElement;
   private config: GridConfig;
@@ -25,10 +32,6 @@ export class GridControls {
   // Grid dimensions
   private gridWidth = 0;
   private gridHeight = 0;
-
-  // Mouse state
-  private mouse = new THREE.Vector2();
-  private gridPosition = { x: 0, y: 0 };
 
   // Zoom state
   private zoomLevel = 1.0;
@@ -48,12 +51,7 @@ export class GridControls {
   private initialZoomLevel = 0;
   private pinchCenterWorld = { x: 0, y: 0 };
 
-  // Bound event handlers
-  private boundOnMouseMove: (e: MouseEvent) => void;
-  private boundOnMouseDown: (e: MouseEvent) => void;
-  private boundOnMouseUp: (e: MouseEvent) => void;
-  private boundOnMouseLeave: (e: MouseEvent) => void;
-  private boundOnWheel: (e: WheelEvent) => void;
+  // Bound event handlers (touch events only - mouse handled via InputHandler)
   private boundOnTouchStart: (e: TouchEvent) => void;
   private boundOnTouchMove: (e: TouchEvent) => void;
   private boundOnTouchEnd: (e: TouchEvent) => void;
@@ -72,19 +70,14 @@ export class GridControls {
     this.renderCallback = renderCallback;
     this.cameraChangeCallback = cameraChangeCallback;
 
-    // Bind event handlers
-    this.boundOnMouseMove = this.onMouseMove.bind(this);
-    this.boundOnMouseDown = this.onMouseDown.bind(this);
-    this.boundOnMouseUp = this.onMouseUp.bind(this);
-    this.boundOnMouseLeave = this.onMouseLeave.bind(this);
-    this.boundOnWheel = this.onWheel.bind(this);
+    // Bind event handlers (touch only - mouse/wheel via InputHandler)
     this.boundOnTouchStart = this.onTouchStart.bind(this);
     this.boundOnTouchMove = this.onTouchMove.bind(this);
     this.boundOnTouchEnd = this.onTouchEnd.bind(this);
     this.boundOnTouchCancel = this.onTouchCancel.bind(this);
 
     this.updateContainerAspect();
-    this.attachEvents();
+    this.attachTouchEvents();
   }
 
   /**
@@ -229,100 +222,101 @@ export class GridControls {
     this.updateCameraProjection();
   }
 
-  private attachEvents(): void {
-    this.domElement.addEventListener('mousemove', this.boundOnMouseMove);
-    this.domElement.addEventListener('mousedown', this.boundOnMouseDown);
-    this.domElement.addEventListener('mouseup', this.boundOnMouseUp);
-    this.domElement.addEventListener('mouseleave', this.boundOnMouseLeave);
-    this.domElement.addEventListener('wheel', this.boundOnWheel, { passive: false });
-
+  /**
+   * Attach touch event listeners (pinch-zoom requires direct touch handling)
+   */
+  private attachTouchEvents(): void {
     this.domElement.addEventListener('touchstart', this.boundOnTouchStart, { passive: false });
     this.domElement.addEventListener('touchmove', this.boundOnTouchMove, { passive: false });
     this.domElement.addEventListener('touchend', this.boundOnTouchEnd);
     this.domElement.addEventListener('touchcancel', this.boundOnTouchCancel);
   }
 
-  private detachEvents(): void {
-    this.domElement.removeEventListener('mousemove', this.boundOnMouseMove);
-    this.domElement.removeEventListener('mousedown', this.boundOnMouseDown);
-    this.domElement.removeEventListener('mouseup', this.boundOnMouseUp);
-    this.domElement.removeEventListener('mouseleave', this.boundOnMouseLeave);
-    this.domElement.removeEventListener('wheel', this.boundOnWheel);
-
+  /**
+   * Detach touch event listeners
+   */
+  private detachTouchEvents(): void {
     this.domElement.removeEventListener('touchstart', this.boundOnTouchStart);
     this.domElement.removeEventListener('touchmove', this.boundOnTouchMove);
     this.domElement.removeEventListener('touchend', this.boundOnTouchEnd);
     this.domElement.removeEventListener('touchcancel', this.boundOnTouchCancel);
   }
 
-  private onMouseMove(event: MouseEvent): void {
-    if (this.touches.size > 0) return;
+  // ============ InputHandler Implementation ============
 
-    const rect = this.domElement.getBoundingClientRect();
-    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  /**
+   * Handle pointer down (InputHandler interface)
+   * Claims left mouse button for panning
+   */
+  onPointerDown(e: NormalizedPointerEvent): boolean {
+    // Only handle mouse (touch handled via direct touch events for pinch support)
+    if (e.isTouchEvent) return false;
 
-    this.updateGridPosition();
-
-    if (this.isPanning) {
-      const ndcDeltaX = ((event.clientX - this.panStartMouse.x) / rect.width) * 2;
-      const ndcDeltaY = -((event.clientY - this.panStartMouse.y) / rect.height) * 2;
-
-      const viewWidth = this.camera.right - this.camera.left;
-      const viewHeight = this.camera.top - this.camera.bottom;
-
-      const worldDeltaX = (ndcDeltaX * viewWidth) / 2;
-      const worldDeltaY = (ndcDeltaY * viewHeight) / 2;
-
-      const newCenterX = this.panStartCameraCenter.x - worldDeltaX;
-      const newCenterY = this.panStartCameraCenter.y - worldDeltaY;
-
-      this.camera.left = newCenterX - viewWidth / 2;
-      this.camera.right = newCenterX + viewWidth / 2;
-      this.camera.top = newCenterY + viewHeight / 2;
-      this.camera.bottom = newCenterY - viewHeight / 2;
-
-      this.clampCameraToBounds();
-      this.updateCameraProjection();
-    }
-  }
-
-  private onMouseDown(event: MouseEvent): void {
-    if (event.button !== 0) return;
-    if (this.touches.size > 0) return;
+    // Only claim left mouse button
+    if (e.button !== 0) return false;
 
     this.isPanning = true;
-    this.panStartMouse = { x: event.clientX, y: event.clientY };
+    this.panStartMouse = { x: e.screenX, y: e.screenY };
     this.panStartCameraCenter = {
       x: (this.camera.left + this.camera.right) / 2,
       y: (this.camera.top + this.camera.bottom) / 2,
     };
 
     this.domElement.style.cursor = 'grabbing';
+    return true; // Claim the interaction
   }
 
-  private onMouseUp(event: MouseEvent): void {
-    if (event.button !== 0) return;
+  /**
+   * Handle pointer move (InputHandler interface)
+   */
+  onPointerMove(e: NormalizedPointerEvent): void {
+    if (!this.isPanning) return;
 
+    const rect = this.domElement.getBoundingClientRect();
+    const ndcDeltaX = ((e.screenX - this.panStartMouse.x) / rect.width) * 2;
+    const ndcDeltaY = -((e.screenY - this.panStartMouse.y) / rect.height) * 2;
+
+    const viewWidth = this.camera.right - this.camera.left;
+    const viewHeight = this.camera.top - this.camera.bottom;
+
+    const worldDeltaX = (ndcDeltaX * viewWidth) / 2;
+    const worldDeltaY = (ndcDeltaY * viewHeight) / 2;
+
+    const newCenterX = this.panStartCameraCenter.x - worldDeltaX;
+    const newCenterY = this.panStartCameraCenter.y - worldDeltaY;
+
+    this.camera.left = newCenterX - viewWidth / 2;
+    this.camera.right = newCenterX + viewWidth / 2;
+    this.camera.top = newCenterY + viewHeight / 2;
+    this.camera.bottom = newCenterY - viewHeight / 2;
+
+    this.clampCameraToBounds();
+    this.updateCameraProjection();
+  }
+
+  /**
+   * Handle pointer up (InputHandler interface)
+   */
+  onPointerUp(_e: NormalizedPointerEvent): void {
     this.isPanning = false;
     this.domElement.style.cursor = 'grab';
   }
 
-  private onMouseLeave(_event: MouseEvent): void {
-    this.isPanning = false;
-    this.domElement.style.cursor = 'default';
-  }
+  /**
+   * Handle wheel zoom (InputHandler interface)
+   */
+  onWheel(e: WheelEvent): boolean {
+    // Don't zoom if ctrl/meta key is pressed (browser zoom)
+    if (e.ctrlKey || e.metaKey) return false;
 
-  private onWheel(event: WheelEvent): void {
-    if (event.ctrlKey || event.metaKey) return;
-
-    event.preventDefault();
-
-    const worldPos = this.screenToWorld(event.clientX, event.clientY);
-    const delta = event.deltaY > 0 ? -1 : 1;
+    const worldPos = this.screenToWorld(e.clientX, e.clientY);
+    const delta = e.deltaY > 0 ? -1 : 1;
 
     this.zoomAtPoint(worldPos.x, worldPos.y, delta);
+    return true; // Handled
   }
+
+  // ============ Touch Event Handlers (Direct - for pinch-zoom support) ============
 
   private onTouchStart(event: TouchEvent): void {
     event.preventDefault();
@@ -467,25 +461,6 @@ export class GridControls {
     this.gestureType = null;
   }
 
-  private updateGridPosition(): void {
-    const worldX =
-      (this.mouse.x * (this.camera.right - this.camera.left)) / 2 +
-      (this.camera.right + this.camera.left) / 2;
-    const worldY =
-      (this.mouse.y * (this.camera.top - this.camera.bottom)) / 2 +
-      (this.camera.top + this.camera.bottom) / 2;
-
-    this.gridPosition.x = worldX;
-    this.gridPosition.y = worldY;
-  }
-
-  /**
-   * Gets the current grid coordinates under the mouse
-   */
-  getGridPosition(): { x: number; y: number } {
-    return { ...this.gridPosition };
-  }
-
   /**
    * Resets the view to show the entire grid (zoomed out)
    */
@@ -522,6 +497,6 @@ export class GridControls {
    * Disposes of event listeners
    */
   dispose(): void {
-    this.detachEvents();
+    this.detachTouchEvents();
   }
 }

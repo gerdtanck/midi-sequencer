@@ -83,6 +83,9 @@ export class NoteGrid {
     );
     this.gridControls.setGridDimensions(this.barCount, this.octaveCount);
 
+    // Register GridControls as input handler (pan/zoom)
+    this.inputManager.register(this.gridControls);
+
     // Initialize playback indicator
     this.playbackIndicator = new PlaybackIndicator(this.scene, this.config);
 
