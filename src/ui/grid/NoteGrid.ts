@@ -9,6 +9,7 @@ import { PianoKeys } from '../overlays/PianoKeys';
 import { BarIndicators } from '../overlays/BarIndicators';
 import { Sequence } from '@/core/Sequence';
 import { SelectionManager } from '@/core/SelectionManager';
+import { InputManager } from '../input';
 
 /**
  * NoteGrid - Main grid class for the MIDI sequencer note grid
@@ -44,6 +45,9 @@ export class NoteGrid {
   // Selection manager
   private selectionManager: SelectionManager | null = null;
 
+  // Input manager for unified event handling
+  private inputManager: InputManager;
+
   // Animation frame ID for cleanup
   private animationFrameId: number | null = null;
 
@@ -61,6 +65,10 @@ export class NoteGrid {
     this.scene = this.createScene();
     this.camera = this.createCamera();
     this.renderer = this.createRenderer();
+
+    // Initialize input manager for unified event handling
+    // Note: Individual handlers will be registered in Phases 4-5
+    this.inputManager = new InputManager(this.renderer.domElement, this.camera);
 
     // Initialize grid components
     this.gridLines = new GridLines(this.scene, this.config);
@@ -532,7 +540,16 @@ export class NoteGrid {
       this.barIndicators.dispose();
     }
 
+    this.inputManager.dispose();
     this.renderer.dispose();
     this.container.removeChild(this.renderer.domElement);
+  }
+
+  /**
+   * Get the input manager for handler registration
+   * Used by handlers to register themselves (Phases 4-5)
+   */
+  getInputManager(): InputManager {
+    return this.inputManager;
   }
 }
