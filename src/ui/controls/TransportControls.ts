@@ -1,5 +1,6 @@
 import type { PlaybackEngine } from '@/core/PlaybackEngine';
 import type { MidiManager } from '@/midi/MidiManager';
+import type { NoteGrid } from '../grid/NoteGrid';
 
 /**
  * TransportControls - UI component for playback control
@@ -9,11 +10,13 @@ import type { MidiManager } from '@/midi/MidiManager';
  * - BPM control
  * - MIDI device picker
  * - Panic button
+ * - Undo/Redo buttons
  */
 export class TransportControls {
   private container: HTMLElement;
   private playbackEngine: PlaybackEngine;
   private midiManager: MidiManager;
+  private noteGrid: NoteGrid | null = null;
 
   // UI elements
   private playButton: HTMLButtonElement | null = null;
@@ -22,6 +25,8 @@ export class TransportControls {
   private panicButton: HTMLButtonElement | null = null;
   private statusText: HTMLElement | null = null;
   private enableMidiButton: HTMLButtonElement | null = null;
+  private undoButton: HTMLButtonElement | null = null;
+  private redoButton: HTMLButtonElement | null = null;
 
   constructor(
     container: HTMLElement,
@@ -31,6 +36,18 @@ export class TransportControls {
     this.container = container;
     this.playbackEngine = playbackEngine;
     this.midiManager = midiManager;
+  }
+
+  /**
+   * Set the note grid for undo/redo functionality
+   */
+  setNoteGrid(noteGrid: NoteGrid): void {
+    this.noteGrid = noteGrid;
+
+    // Listen to command history changes to update button states
+    noteGrid.getCommandHistory().onChange(() => {
+      this.updateUndoRedoButtons();
+    });
   }
 
   /**
@@ -123,6 +140,36 @@ export class TransportControls {
 
     bpmSection.appendChild(bpmRow);
     this.container.appendChild(bpmSection);
+
+    // Edit section (Undo/Redo)
+    const editSection = document.createElement('div');
+    editSection.className = 'control-group';
+
+    const editLabel = document.createElement('label');
+    editLabel.textContent = 'Edit';
+    editSection.appendChild(editLabel);
+
+    const editRow = document.createElement('div');
+    editRow.className = 'transport-controls';
+
+    this.undoButton = document.createElement('button');
+    this.undoButton.className = 'transport-btn undo';
+    this.undoButton.textContent = '↩ Undo';
+    this.undoButton.title = 'Undo (Ctrl+Z)';
+    this.undoButton.disabled = true;
+    this.undoButton.addEventListener('click', () => this.onUndoClick());
+    editRow.appendChild(this.undoButton);
+
+    this.redoButton = document.createElement('button');
+    this.redoButton.className = 'transport-btn redo';
+    this.redoButton.textContent = '↪ Redo';
+    this.redoButton.title = 'Redo (Ctrl+Y)';
+    this.redoButton.disabled = true;
+    this.redoButton.addEventListener('click', () => this.onRedoClick());
+    editRow.appendChild(this.redoButton);
+
+    editSection.appendChild(editRow);
+    this.container.appendChild(editSection);
 
     // Disable playback controls until MIDI is enabled
     this.setControlsEnabled(false);
@@ -300,6 +347,37 @@ export class TransportControls {
     } else {
       // Reset to current value
       this.bpmInput.value = String(this.playbackEngine.getBPM());
+    }
+  }
+
+  /**
+   * Handle undo button click
+   */
+  private onUndoClick(): void {
+    this.noteGrid?.undo();
+  }
+
+  /**
+   * Handle redo button click
+   */
+  private onRedoClick(): void {
+    this.noteGrid?.redo();
+  }
+
+  /**
+   * Update undo/redo button states based on command history
+   */
+  private updateUndoRedoButtons(): void {
+    if (!this.noteGrid) return;
+
+    const canUndo = this.noteGrid.canUndo();
+    const canRedo = this.noteGrid.canRedo();
+
+    if (this.undoButton) {
+      this.undoButton.disabled = !canUndo;
+    }
+    if (this.redoButton) {
+      this.redoButton.disabled = !canRedo;
     }
   }
 

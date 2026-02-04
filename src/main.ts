@@ -72,6 +72,7 @@ function initApp(): void {
   // Initialize transport controls
   if (transportContainer) {
     transportControls = new TransportControls(transportContainer, playbackEngine, midiManager);
+    transportControls.setNoteGrid(noteGrid);
     transportControls.render();
   }
 
