@@ -71,18 +71,39 @@ function initApp(): void {
     noteGrid.initBarIndicators(barIndicatorsContainer);
   }
 
-  // Wire note audition during drag
+  // Wire note audition (drag, create, paste)
   let auditioningPitches: number[] = [];
+  let auditionStopTimer: number | null = null;
+  const AUDITION_DURATION_MS = 150; // Auto-stop after this duration
+
   noteGrid.setNoteAuditionCallback((pitches: number[]) => {
+    // Clear any pending auto-stop
+    if (auditionStopTimer !== null) {
+      clearTimeout(auditionStopTimer);
+      auditionStopTimer = null;
+    }
+
     // Stop previously auditioned notes
     for (const pitch of auditioningPitches) {
       midiManager?.sendNoteOff(0, pitch);
     }
+
     // Play new notes (pitches already include BASE_MIDI from sequence)
     for (const pitch of pitches) {
       midiManager?.sendNoteOn(0, pitch, 100);
     }
     auditioningPitches = pitches;
+
+    // Auto-stop notes after duration (for create/paste; drag sends empty array to stop)
+    if (pitches.length > 0) {
+      auditionStopTimer = window.setTimeout(() => {
+        for (const pitch of auditioningPitches) {
+          midiManager?.sendNoteOff(0, pitch);
+        }
+        auditioningPitches = [];
+        auditionStopTimer = null;
+      }, AUDITION_DURATION_MS);
+    }
   });
 
   // Initialize transport controls

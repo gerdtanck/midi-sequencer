@@ -56,6 +56,9 @@ export class NoteGrid {
   // Command history for undo/redo
   private commandHistory: CommandHistory = new CommandHistory();
 
+  // Note audition callback (for playing notes on create/paste)
+  private onNoteAudition: ((pitches: number[]) => void) | null = null;
+
   // Input manager for unified event handling
   private inputManager: InputManager;
 
@@ -205,6 +208,9 @@ export class NoteGrid {
         DEFAULT_NOTE_DURATION
       );
       this.commandHistory.execute(command);
+
+      // Audition the new note
+      this.onNoteAudition?.([cell.pitch]);
     }
 
     this.forceRender();
@@ -263,6 +269,22 @@ export class NoteGrid {
     );
     this.commandHistory.execute(command);
     this.forceRender();
+
+    // Audition the pasted notes
+    if (this.onNoteAudition) {
+      // Calculate new pitches (same logic as Sequence.copyNotes)
+      let minStep = Infinity;
+      let minPitch = Infinity;
+      for (const { step, pitch } of selectedNotes) {
+        if (step < minStep || (step === minStep && pitch < minPitch)) {
+          minStep = step;
+          minPitch = pitch;
+        }
+      }
+      const deltaPitch = targetPitch - minPitch;
+      const newPitches = selectedNotes.map(n => n.pitch + deltaPitch);
+      this.onNoteAudition(newPitches);
+    }
   }
 
   /**
@@ -286,11 +308,12 @@ export class NoteGrid {
   }
 
   /**
-   * Set callback for note audition during drag
-   * Called with array of pitches when notes cross pitch boundaries
+   * Set callback for note audition during drag and note creation
+   * Called with array of pitches when notes cross pitch boundaries or are created
    * Called with empty array when drag ends (to stop audition)
    */
   setNoteAuditionCallback(callback: (pitches: number[]) => void): void {
+    this.onNoteAudition = callback;
     if (this.noteInteraction) {
       this.noteInteraction.setNoteAuditionCallback(callback);
     }
