@@ -269,7 +269,8 @@ export class Sequence {
 
     // Then, place them at new positions
     for (const { step: oldStep, pitch: oldPitch, note } of notesToMove) {
-      const newStep = oldStep + deltaStep;
+      // Round step to integer (playback only checks integer steps)
+      const newStep = Math.round(oldStep + deltaStep);
       const newPitch = oldPitch + deltaPitch;
 
       note.pitch = newPitch;
@@ -328,7 +329,8 @@ export class Sequence {
       const sourceNote = this.getNoteAt(step, pitch);
       if (!sourceNote) continue;
 
-      const newStep = step + deltaStep;
+      // Round step to integer (playback only checks integer steps)
+      const newStep = Math.round(step + deltaStep);
       const newPitch = pitch + deltaPitch;
 
       // Add the copy
