@@ -27,6 +27,7 @@ export class TransportControls {
   private enableMidiButton: HTMLButtonElement | null = null;
   private undoButton: HTMLButtonElement | null = null;
   private redoButton: HTMLButtonElement | null = null;
+  private fullscreenButton: HTMLButtonElement | null = null;
 
   constructor(
     container: HTMLElement,
@@ -170,6 +171,33 @@ export class TransportControls {
 
     editSection.appendChild(editRow);
     this.container.appendChild(editSection);
+
+    // Fullscreen button (show only if supported)
+    if (this.isFullscreenSupported()) {
+      const fullscreenSection = document.createElement('div');
+      fullscreenSection.className = 'control-group';
+
+      const fullscreenLabel = document.createElement('label');
+      fullscreenLabel.textContent = 'View';
+      fullscreenSection.appendChild(fullscreenLabel);
+
+      this.fullscreenButton = document.createElement('button');
+      this.fullscreenButton.className = 'transport-btn fullscreen';
+      this.fullscreenButton.textContent = '⛶ Fullscreen';
+      this.fullscreenButton.addEventListener('click', () => this.onFullscreenClick());
+      fullscreenSection.appendChild(this.fullscreenButton);
+
+      const fullscreenHint = document.createElement('div');
+      fullscreenHint.className = 'control-hint';
+      fullscreenHint.textContent = 'Or add to home screen for best experience';
+      fullscreenSection.appendChild(fullscreenHint);
+
+      this.container.appendChild(fullscreenSection);
+
+      // Listen for fullscreen changes
+      document.addEventListener('fullscreenchange', () => this.updateFullscreenButton());
+      document.addEventListener('webkitfullscreenchange', () => this.updateFullscreenButton());
+    }
 
     // Disable playback controls until MIDI is enabled
     this.setControlsEnabled(false);
@@ -378,6 +406,58 @@ export class TransportControls {
     }
     if (this.redoButton) {
       this.redoButton.disabled = !canRedo;
+    }
+  }
+
+  /**
+   * Check if fullscreen API is supported
+   */
+  private isFullscreenSupported(): boolean {
+    return !!(
+      document.documentElement.requestFullscreen ||
+      (document.documentElement as any).webkitRequestFullscreen
+    );
+  }
+
+  /**
+   * Check if currently in fullscreen
+   */
+  private isFullscreen(): boolean {
+    return !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+  }
+
+  /**
+   * Handle fullscreen button click
+   */
+  private onFullscreenClick(): void {
+    if (this.isFullscreen()) {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      }
+    } else {
+      // Enter fullscreen
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if ((elem as any).webkitRequestFullscreen) {
+        (elem as any).webkitRequestFullscreen();
+      }
+    }
+  }
+
+  /**
+   * Update fullscreen button text based on state
+   */
+  private updateFullscreenButton(): void {
+    if (!this.fullscreenButton) return;
+
+    if (this.isFullscreen()) {
+      this.fullscreenButton.textContent = '⛶ Exit Fullscreen';
+    } else {
+      this.fullscreenButton.textContent = '⛶ Fullscreen';
     }
   }
 

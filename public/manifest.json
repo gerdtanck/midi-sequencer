@@ -1,0 +1,19 @@
+{
+  "name": "MIDI Step Sequencer",
+  "short_name": "MIDI Seq",
+  "description": "A web-based MIDI step sequencer with touch support",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
