@@ -9,6 +9,9 @@ export const STEPS_PER_BAR = 16;
 export const STEPS_PER_QUARTER = 4;
 export const SEMITONES_PER_OCTAVE = 12;
 
+// Substep resolution (6 = supports triplets and standard divisions)
+export const SUBSTEPS_PER_STEP = 6;
+
 // Default grid size
 export const DEFAULT_BARS = 4;
 export const DEFAULT_OCTAVES = 3;

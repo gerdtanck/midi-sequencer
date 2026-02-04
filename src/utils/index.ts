@@ -17,3 +17,9 @@ export {
   supportsWebMidi,
   resetPlatformCache,
 } from './PlatformUtils';
+
+export {
+  snapToSubstep,
+  stepToSubstepIndex,
+  substepIndexToStep,
+} from './TimeUtils';

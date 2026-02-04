@@ -5,6 +5,7 @@ import {
   DEFAULT_NOTE_VELOCITY,
   DEFAULT_NOTE_DURATION,
 } from '@/config/GridConfig';
+import { snapToSubstep } from '@/utils';
 
 /**
  * Manages a step sequence with sparse note storage
@@ -269,8 +270,8 @@ export class Sequence {
 
     // Then, place them at new positions
     for (const { step: oldStep, pitch: oldPitch, note } of notesToMove) {
-      // Round step to integer (playback only checks integer steps)
-      const newStep = Math.round(oldStep + deltaStep);
+      // Snap step to nearest substep for precise playback timing
+      const newStep = snapToSubstep(oldStep + deltaStep);
       const newPitch = oldPitch + deltaPitch;
 
       note.pitch = newPitch;
@@ -329,8 +330,8 @@ export class Sequence {
       const sourceNote = this.getNoteAt(step, pitch);
       if (!sourceNote) continue;
 
-      // Round step to integer (playback only checks integer steps)
-      const newStep = Math.round(step + deltaStep);
+      // Snap step to nearest substep for precise playback timing
+      const newStep = snapToSubstep(step + deltaStep);
       const newPitch = pitch + deltaPitch;
 
       // Add the copy

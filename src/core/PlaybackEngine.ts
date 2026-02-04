@@ -2,6 +2,8 @@ import type { Sequence } from './Sequence';
 import type { MidiManager } from '@/midi/MidiManager';
 import type { LookaheadScheduler } from '@/scheduler/LookaheadScheduler';
 import { MidiClockGenerator } from '@/scheduler/MidiClockGenerator';
+import { SUBSTEPS_PER_STEP } from '@/config/GridConfig';
+import { snapToSubstep } from '@/utils';
 
 /**
  * Callback for playback position updates
@@ -139,20 +141,24 @@ export class PlaybackEngine {
   }
 
   /**
-   * Schedule the next step
+   * Schedule the next substep
    */
   private scheduleNextStep(): void {
     if (!this._isPlaying) {
       return;
     }
 
-    // Get notes at current step
-    const notes = this.sequence.getNotesAt(this.currentStep);
+    // Snap current step to avoid floating point drift
+    const snappedStep = snapToSubstep(this.currentStep);
+
+    // Get notes at current substep position
+    const notes = this.sequence.getNotesAt(snappedStep);
     const channel = this.sequence.getMidiChannel();
 
     // Schedule each note
     for (const note of notes) {
-      const durationMs = this.stepDurationMs() * note.duration;
+      // Duration is relative to full steps, convert to ms
+      const durationMs = this.fullStepDurationMs() * note.duration;
 
       // Schedule note on
       this.scheduler.scheduleEvent(() => {
@@ -165,19 +171,21 @@ export class PlaybackEngine {
       }, this.nextStepTime + durationMs);
     }
 
-    // Notify position change
-    const stepForCallback = this.currentStep;
-    this.scheduler.scheduleEvent(() => {
-      if (this.onPositionChange && this._isPlaying) {
-        this.onPositionChange(stepForCallback);
-      }
-    }, this.nextStepTime);
+    // Notify position change (only on full steps for UI indicator)
+    if (Number.isInteger(snappedStep)) {
+      const stepForCallback = snappedStep;
+      this.scheduler.scheduleEvent(() => {
+        if (this.onPositionChange && this._isPlaying) {
+          this.onPositionChange(stepForCallback);
+        }
+      }, this.nextStepTime);
+    }
 
-    // Advance to next step
-    this.currentStep = this.sequence.getNextStep(this.currentStep);
+    // Advance to next substep
+    this.currentStep = this.getNextSubstep(snappedStep);
 
-    // Calculate next step time
-    this.nextStepTime += this.stepDurationMs();
+    // Calculate next substep time
+    this.nextStepTime += this.substepDurationMs();
 
     // Schedule next tick with 100ms lookahead
     const scheduleTime = this.nextStepTime - 100;
@@ -185,11 +193,32 @@ export class PlaybackEngine {
   }
 
   /**
-   * Calculate duration of one step in milliseconds
+   * Get the next substep, handling loop boundaries
+   */
+  private getNextSubstep(currentSubstep: number): number {
+    const substepIncrement = 1 / SUBSTEPS_PER_STEP;
+    const nextSubstep = snapToSubstep(currentSubstep + substepIncrement);
+
+    const markers = this.sequence.getLoopMarkers();
+    if (nextSubstep >= markers.end) {
+      return markers.start;
+    }
+    return nextSubstep;
+  }
+
+  /**
+   * Calculate duration of one full step in milliseconds
    * 16 steps per 4 beats = 4 steps per beat (each step is a 16th note)
    */
-  private stepDurationMs(): number {
+  private fullStepDurationMs(): number {
     const msPerBeat = (60 / this._bpm) * 1000;
     return msPerBeat / 4; // 4 steps per beat
+  }
+
+  /**
+   * Calculate duration of one substep in milliseconds
+   */
+  private substepDurationMs(): number {
+    return this.fullStepDurationMs() / SUBSTEPS_PER_STEP;
   }
 }
