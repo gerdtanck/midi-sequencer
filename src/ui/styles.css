@@ -1,0 +1,511 @@
+/* MIDI Sequencer Styles */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  /* Grid colors */
+  --grid-background: #1a1a2e;
+  --bar-line-color: #e0e0e0;
+  --quarter-line-color: #6a6a8a;
+  --step-line-color: #3a3a4e;
+  --octave-line-color: #7a7a9a;
+  --semitone-line-color: #2e2e3e;
+
+  /* Line thicknesses */
+  --bar-line-width: 3;
+  --quarter-line-width: 2;
+  --step-line-width: 1;
+  --octave-line-width: 2;
+  --semitone-line-width: 1;
+
+  /* UI colors */
+  --control-background: #16213e;
+  --control-text: #e0e0e0;
+  --control-border: #0f3460;
+  --control-accent: #e94560;
+
+  /* Piano keys and bar indicators dimensions */
+  --piano-keys-width: 40px;
+  --bar-indicator-height: 20px;
+
+  /* Piano key colors */
+  --white-key-bg: #e8e8e8;
+  --white-key-text: #333;
+  --black-key-bg: #333;
+  --black-key-text: #e0e0e0;
+  --key-hover-brightness: 1.15;
+  --key-border-color: #555;
+
+  /* Bar indicator colors */
+  --bar-indicator-bg: #1e1e3a;
+  --bar-indicator-text: #aaa;
+  --bar-indicator-hover-bg: #2a2a4a;
+
+  /* Note colors */
+  --note-color: #e94560;
+  --note-selected-color: #ff6b8a;
+  --note-border-color: #c73e55;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--grid-background);
+  color: var(--control-text);
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  display: flex;
+}
+
+/* Grid Area - Main sequencer view */
+.grid-area {
+  display: grid;
+  grid-template-columns: var(--piano-keys-width) 1fr;
+  grid-template-rows: var(--bar-indicator-height) 1fr;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Corner cell - empty space at intersection */
+#corner-cell {
+  grid-area: 1 / 1;
+  background-color: var(--control-background);
+  border-right: 1px solid var(--control-border);
+  border-bottom: 1px solid var(--control-border);
+}
+
+/* Bar indicators container - top row, scrolls horizontally */
+#bar-indicators-container {
+  grid-area: 1 / 2;
+  overflow: hidden;
+  position: relative;
+  background-color: var(--bar-indicator-bg);
+  border-bottom: 1px solid var(--control-border);
+}
+
+/* Piano keys container - left column, scrolls vertically */
+#piano-keys-container {
+  grid-area: 2 / 1;
+  overflow: hidden;
+  position: relative;
+  background-color: var(--control-background);
+  border-right: 1px solid var(--control-border);
+}
+
+/* Note Grid Container */
+#note-grid-container {
+  grid-area: 2 / 2;
+  position: relative;
+  background-color: var(--grid-background);
+}
+
+#note-grid-container canvas {
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+
+/* Controls Panel */
+#controls-panel {
+  width: 280px;
+  min-width: 280px;
+  height: 100%;
+  background-color: var(--control-background);
+  padding: 20px;
+  border-left: 2px solid var(--control-border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#controls-panel h1 {
+  font-size: 1.25rem;
+  margin-bottom: 8px;
+  color: var(--control-accent);
+  border-bottom: 1px solid var(--control-border);
+  padding-bottom: 8px;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-group label {
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--control-text);
+}
+
+.control-group input[type='number'] {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 1rem;
+  background-color: var(--grid-background);
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+  color: var(--control-text);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.control-group input[type='number']:focus {
+  border-color: var(--control-accent);
+}
+
+.control-hint {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+/* Transport Controls */
+.transport-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.transport-btn {
+  padding: 10px 16px;
+  font-size: 1rem;
+  background-color: var(--grid-background);
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+  color: var(--control-text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.transport-btn:hover {
+  background-color: var(--control-border);
+}
+
+.transport-btn.play {
+  background-color: var(--control-accent);
+  border-color: var(--control-accent);
+  color: white;
+}
+
+.transport-btn.play:hover {
+  filter: brightness(1.1);
+}
+
+.transport-btn.panic {
+  background-color: #ff4444;
+  border-color: #ff4444;
+  color: white;
+}
+
+.transport-btn.enable-midi {
+  background-color: #4a9eff;
+  border-color: #4a9eff;
+  color: white;
+  width: 100%;
+}
+
+.transport-btn.enable-midi:hover {
+  filter: brightness(1.1);
+}
+
+.transport-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.transport-btn:disabled:hover {
+  background-color: var(--grid-background);
+  filter: none;
+}
+
+/* BPM Control */
+.bpm-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bpm-control input[type='number'] {
+  width: 80px;
+  text-align: center;
+}
+
+/* Device Select */
+.device-select {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  background-color: var(--grid-background);
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+  color: var(--control-text);
+  cursor: pointer;
+  outline: none;
+}
+
+.device-select:focus {
+  border-color: var(--control-accent);
+}
+
+.device-select option {
+  background-color: var(--grid-background);
+  color: var(--control-text);
+}
+
+/* Piano Keys Styles */
+.piano-keys-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.piano-key {
+  position: absolute;
+  width: 100%;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--key-border-color);
+  user-select: none;
+  overflow: hidden;
+}
+
+.piano-key-label {
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.piano-key.white {
+  background: var(--white-key-bg);
+  color: var(--white-key-text);
+}
+
+.piano-key.black {
+  background: var(--black-key-bg);
+  color: var(--black-key-text);
+}
+
+.piano-key:hover,
+.piano-key.highlight {
+  filter: brightness(var(--key-hover-brightness));
+}
+
+.piano-key.active {
+  filter: brightness(0.85);
+}
+
+/* Bar Indicators Styles */
+.bar-indicators-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.bar-indicator {
+  position: absolute;
+  height: 100%;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bar-indicator-bg);
+  border-right: 1px solid var(--bar-line-color);
+  color: var(--bar-indicator-text);
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.bar-indicator-label {
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.bar-indicator:hover,
+.bar-indicator.highlight {
+  background: var(--bar-indicator-hover-bg);
+  color: var(--control-text);
+}
+
+.bar-indicator.active {
+  background: var(--control-accent);
+  color: white;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  #controls-panel {
+    width: 200px;
+    min-width: 200px;
+    padding: 12px;
+  }
+
+  :root {
+    --piano-keys-width: 32px;
+    --bar-indicator-height: 16px;
+  }
+
+  .transport-btn {
+    padding: 12px 14px;
+    font-size: 0.9rem;
+  }
+
+  .device-select {
+    font-size: 0.85rem;
+    padding: 10px;
+  }
+}
+
+@media (max-width: 600px) {
+  #app {
+    flex-direction: column;
+  }
+
+  .grid-area {
+    flex: 1;
+    min-height: 0;
+  }
+
+  :root {
+    --piano-keys-width: 28px;
+    --bar-indicator-height: 18px;
+  }
+
+  #controls-panel {
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+    max-height: none;
+    border-left: none;
+    border-top: 2px solid var(--control-border);
+    padding: 12px;
+    gap: 12px;
+  }
+
+  #controls-panel h1 {
+    display: none;
+  }
+
+  .control-group {
+    width: 100%;
+  }
+
+  .control-group label {
+    font-size: 0.8rem;
+  }
+
+  /* Horizontal layout for transport on mobile */
+  .transport-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .transport-btn {
+    flex: 1;
+    min-width: 80px;
+    padding: 14px 12px;
+    font-size: 1rem;
+  }
+
+  .transport-btn.enable-midi {
+    flex-basis: 100%;
+  }
+
+  /* BPM control inline */
+  .bpm-control {
+    flex-wrap: wrap;
+  }
+
+  .bpm-control input[type='number'] {
+    flex: 1;
+    min-width: 60px;
+  }
+
+  .device-select {
+    padding: 12px;
+    font-size: 1rem;
+  }
+
+  /* Piano key labels smaller on mobile */
+  .piano-key-label {
+    font-size: 8px;
+  }
+}
+
+/* Extra small screens (phones in portrait) */
+@media (max-width: 400px) {
+  :root {
+    --piano-keys-width: 24px;
+    --bar-indicator-height: 16px;
+  }
+
+  .piano-key-label {
+    font-size: 7px;
+  }
+
+  .bar-indicator-label {
+    font-size: 9px;
+  }
+
+  #controls-panel {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .transport-btn {
+    padding: 12px 10px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Landscape phone optimization */
+@media (max-height: 500px) and (orientation: landscape) {
+  #app {
+    flex-direction: row;
+  }
+
+  #controls-panel {
+    width: 180px;
+    min-width: 180px;
+    max-height: 100%;
+    border-top: none;
+    border-left: 2px solid var(--control-border);
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  #controls-panel h1 {
+    display: none;
+  }
+
+  .control-group {
+    margin-bottom: 8px;
+  }
+
+  .transport-btn {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+  }
+}
