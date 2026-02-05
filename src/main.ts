@@ -1,6 +1,6 @@
 import './ui/styles.css';
 import { NoteGrid } from './ui/grid';
-import { Sequence, PlaybackEngine } from './core';
+import { PlaybackEngine, SequenceManager } from './core';
 import { ScaleManager } from './core/ScaleManager';
 import { MidiManager } from './midi';
 import { LookaheadScheduler } from './scheduler';
@@ -12,7 +12,7 @@ import { BASE_MIDI } from './config/GridConfig';
  * Global application state
  */
 let noteGrid: NoteGrid | null = null;
-let sequence: Sequence | null = null;
+let sequenceManager: SequenceManager | null = null;
 let scaleManager: ScaleManager | null = null;
 let midiManager: MidiManager | null = null;
 let scheduler: LookaheadScheduler | null = null;
@@ -43,17 +43,23 @@ function initApp(): void {
   }
 
   // Create core components
-  sequence = new Sequence();
+  sequenceManager = new SequenceManager();
   scaleManager = new ScaleManager();
   midiManager = new MidiManager();
   scheduler = new LookaheadScheduler();
-  playbackEngine = new PlaybackEngine(sequence, midiManager, scheduler);
+
+  // Create playback engine with all 4 sequences
+  playbackEngine = new PlaybackEngine(
+    sequenceManager.getAllSequences(),
+    midiManager,
+    scheduler
+  );
 
   // Create the note grid
   noteGrid = new NoteGrid(gridContainer);
 
-  // Initialize note interaction (click to add/remove notes)
-  noteGrid.initNoteInteraction(sequence);
+  // Initialize note interaction with the active sequence
+  noteGrid.initNoteInteraction(sequenceManager.getActiveSequence());
 
   // Wire scale manager to grid (for scale highlighting)
   noteGrid.setScaleManager(scaleManager);
@@ -65,13 +71,14 @@ function initApp(): void {
     // Wire piano keys to MIDI output for note audition
     noteGrid.setPianoKeyCallbacks(
       (semitone: number) => {
-        // Note On with default velocity 100 on channel 0
-        // Add BASE_MIDI to convert grid row to actual MIDI note
-        midiManager?.sendNoteOn(0, BASE_MIDI + semitone, 100);
+        // Note On with default velocity 100 on active sequence's channel
+        const channel = sequenceManager?.getActiveSequence().getMidiChannel() ?? 0;
+        midiManager?.sendNoteOn(channel, BASE_MIDI + semitone, 100);
       },
       (semitone: number) => {
-        // Note Off on channel 0
-        midiManager?.sendNoteOff(0, BASE_MIDI + semitone);
+        // Note Off on active sequence's channel
+        const channel = sequenceManager?.getActiveSequence().getMidiChannel() ?? 0;
+        midiManager?.sendNoteOff(channel, BASE_MIDI + semitone);
       }
     );
   }
@@ -92,22 +99,26 @@ function initApp(): void {
       auditionStopTimer = null;
     }
 
+    // Get active sequence's channel
+    const channel = sequenceManager?.getActiveSequence().getMidiChannel() ?? 0;
+
     // Stop previously auditioned notes
     for (const pitch of auditioningPitches) {
-      midiManager?.sendNoteOff(0, pitch);
+      midiManager?.sendNoteOff(channel, pitch);
     }
 
     // Play new notes (pitches already include BASE_MIDI from sequence)
     for (const pitch of pitches) {
-      midiManager?.sendNoteOn(0, pitch, 100);
+      midiManager?.sendNoteOn(channel, pitch, 100);
     }
     auditioningPitches = pitches;
 
     // Auto-stop notes after duration (for create/paste; drag sends empty array to stop)
     if (pitches.length > 0) {
       auditionStopTimer = window.setTimeout(() => {
+        const ch = sequenceManager?.getActiveSequence().getMidiChannel() ?? 0;
         for (const pitch of auditioningPitches) {
-          midiManager?.sendNoteOff(0, pitch);
+          midiManager?.sendNoteOff(ch, pitch);
         }
         auditioningPitches = [];
         auditionStopTimer = null;
@@ -118,7 +129,23 @@ function initApp(): void {
   // Initialize transport controls
   if (transportContainer) {
     transportControls = new TransportControls(transportContainer, playbackEngine, midiManager);
+    transportControls.setSequenceManager(sequenceManager);
     transportControls.setNoteGrid(noteGrid);
+
+    // Handle sequence selection
+    transportControls.setSequenceSelectCallback((index: number) => {
+      if (!sequenceManager || !noteGrid || !playbackEngine) return;
+
+      // Update sequence manager
+      sequenceManager.setActiveSequence(index);
+
+      // Update playback engine active sequence (for position reporting)
+      playbackEngine.setActiveSequence(index);
+
+      // Switch note grid to new sequence
+      noteGrid.setSequence(sequenceManager.getActiveSequence());
+    });
+
     transportControls.render();
   }
 
@@ -156,7 +183,7 @@ function initApp(): void {
   // Expose to window for debugging
   Object.assign(window, {
     noteGrid,
-    sequence,
+    sequenceManager,
     scaleManager,
     midiManager,
     scheduler,
@@ -167,6 +194,7 @@ function initApp(): void {
 
   console.log('MIDI Sequencer initialized');
   console.log(`Grid: ${noteGrid.getBarCount()} bars × ${noteGrid.getOctaveCount()} octaves`);
+  console.log('Multi-sequence support: 4 sequences available');
 }
 
 /**
@@ -176,18 +204,22 @@ function setupGridControls(
   barInput: HTMLInputElement | null,
   octaveInput: HTMLInputElement | null
 ): void {
-  if (!noteGrid || !sequence) return;
+  if (!noteGrid || !sequenceManager) return;
 
   if (barInput) {
     barInput.value = String(noteGrid.getBarCount());
 
     barInput.addEventListener('input', (e) => {
       const value = parseInt((e.target as HTMLInputElement).value, 10);
-      if (!isNaN(value) && noteGrid && sequence) {
+      if (!isNaN(value) && noteGrid && sequenceManager) {
         noteGrid.setBarCount(value);
-        // Update sequence loop markers to match grid size
+        // Update ALL sequences' loop markers to match grid size
         const newEnd = noteGrid.getBarCount() * 16; // 16 steps per bar
-        sequence.setLoopMarkers({ start: 0, end: newEnd });
+        for (const seq of sequenceManager.getAllSequences()) {
+          seq.setLoopMarkers({ start: 0, end: newEnd });
+        }
+        // Refresh loop markers display after updating sequence values
+        noteGrid.refreshLoopMarkers();
         (e.target as HTMLInputElement).value = String(noteGrid.getBarCount());
       }
     });

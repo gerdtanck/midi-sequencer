@@ -11,32 +11,65 @@ import { snapToSubstep } from '@/utils';
 export type PlaybackPositionCallback = (step: number) => void;
 
 /**
+ * Per-sequence playback state
+ */
+interface SequenceState {
+  currentStep: number;
+  nextStepTime: number;
+}
+
+/**
  * PlaybackEngine - Drives sequence playback with precise timing
  *
- * Uses lookahead scheduling to compensate for JavaScript timing drift.
- * Supports single sequence playback with loop markers.
+ * Supports multiple sequences playing simultaneously, each with:
+ * - Independent loop markers
+ * - Independent MIDI channel
+ * - Shared BPM (tempo is global)
  */
 export class PlaybackEngine {
-  private sequence: Sequence;
+  private sequences: Sequence[];
   private midiManager: MidiManager;
   private scheduler: LookaheadScheduler;
   private clockGenerator: MidiClockGenerator;
 
-  // Playback state
+  // Active sequence for UI display
+  private activeIndex = 0;
+
+  // Per-sequence playback state
+  private states: SequenceState[];
+
+  // Global playback state
   private _isPlaying = false;
   private _bpm = 120;
-  private currentStep = 0;
-  private nextStepTime = 0;
 
-  // Position update callback
+  // Position update callback (reports active sequence position)
   private onPositionChange: PlaybackPositionCallback | null = null;
 
-  constructor(sequence: Sequence, midiManager: MidiManager, scheduler: LookaheadScheduler) {
-    this.sequence = sequence;
+  constructor(sequences: Sequence[], midiManager: MidiManager, scheduler: LookaheadScheduler) {
+    this.sequences = sequences;
     this.midiManager = midiManager;
     this.scheduler = scheduler;
     this.clockGenerator = new MidiClockGenerator(scheduler, midiManager);
     this.clockGenerator.setBPM(this._bpm);
+
+    // Initialize per-sequence state
+    this.states = sequences.map(() => ({ currentStep: 0, nextStepTime: 0 }));
+  }
+
+  /**
+   * Set which sequence is "active" (for UI position reporting)
+   */
+  setActiveSequence(index: number): void {
+    if (index >= 0 && index < this.sequences.length) {
+      this.activeIndex = index;
+    }
+  }
+
+  /**
+   * Get active sequence index
+   */
+  getActiveIndex(): number {
+    return this.activeIndex;
   }
 
   /**
@@ -57,12 +90,13 @@ export class PlaybackEngine {
 
     this._isPlaying = true;
 
-    // Reset to loop start
-    const markers = this.sequence.getLoopMarkers();
-    this.currentStep = markers.start;
-
-    // Initialize timing
-    this.nextStepTime = performance.now();
+    // Initialize all sequence states to their loop starts
+    const now = performance.now();
+    for (let i = 0; i < this.sequences.length; i++) {
+      const markers = this.sequences[i].getLoopMarkers();
+      this.states[i].currentStep = markers.start;
+      this.states[i].nextStepTime = now;
+    }
 
     // Start scheduler if not already running
     if (!this.scheduler.isRunning) {
@@ -106,7 +140,7 @@ export class PlaybackEngine {
   }
 
   /**
-   * Set tempo
+   * Set tempo (global for all sequences)
    */
   setBPM(bpm: number): void {
     if (bpm <= 0 || bpm > 300) {
@@ -134,26 +168,55 @@ export class PlaybackEngine {
   }
 
   /**
-   * Get current playback step
+   * Get current playback step for active sequence
    */
   getCurrentStep(): number {
-    return this.currentStep;
+    return this.states[this.activeIndex].currentStep;
   }
 
   /**
-   * Schedule the next substep
+   * Schedule the next substep for all sequences
    */
   private scheduleNextStep(): void {
     if (!this._isPlaying) {
       return;
     }
 
+    // Find the earliest next step time across all sequences
+    let earliestTime = Infinity;
+    for (const state of this.states) {
+      if (state.nextStepTime < earliestTime) {
+        earliestTime = state.nextStepTime;
+      }
+    }
+
+    // Process all sequences that are due at this time
+    for (let i = 0; i < this.sequences.length; i++) {
+      const state = this.states[i];
+      if (Math.abs(state.nextStepTime - earliestTime) < 0.1) {
+        this.scheduleSequenceStep(i);
+      }
+    }
+
+    // Schedule next tick with 100ms lookahead
+    const nextEarliestTime = Math.min(...this.states.map((s) => s.nextStepTime));
+    const scheduleTime = nextEarliestTime - 100;
+    this.scheduler.scheduleEvent(() => this.scheduleNextStep(), scheduleTime);
+  }
+
+  /**
+   * Schedule notes for a single sequence at its current step
+   */
+  private scheduleSequenceStep(index: number): void {
+    const seq = this.sequences[index];
+    const state = this.states[index];
+
     // Snap current step to avoid floating point drift
-    const snappedStep = snapToSubstep(this.currentStep);
+    const snappedStep = snapToSubstep(state.currentStep);
 
     // Get notes at current substep position
-    const notes = this.sequence.getNotesAt(snappedStep);
-    const channel = this.sequence.getMidiChannel();
+    const notes = seq.getNotesAt(snappedStep);
+    const channel = seq.getMidiChannel();
 
     // Schedule each note
     for (const note of notes) {
@@ -163,43 +226,39 @@ export class PlaybackEngine {
       // Schedule note on
       this.scheduler.scheduleEvent(() => {
         this.midiManager.sendNoteOn(channel, note.pitch, note.velocity);
-      }, this.nextStepTime);
+      }, state.nextStepTime);
 
       // Schedule note off
       this.scheduler.scheduleEvent(() => {
         this.midiManager.sendNoteOff(channel, note.pitch);
-      }, this.nextStepTime + durationMs);
+      }, state.nextStepTime + durationMs);
     }
 
-    // Notify position change (only on full steps for UI indicator)
-    if (Number.isInteger(snappedStep)) {
+    // Notify position change for active sequence only (on full steps)
+    if (index === this.activeIndex && Number.isInteger(snappedStep)) {
       const stepForCallback = snappedStep;
       this.scheduler.scheduleEvent(() => {
         if (this.onPositionChange && this._isPlaying) {
           this.onPositionChange(stepForCallback);
         }
-      }, this.nextStepTime);
+      }, state.nextStepTime);
     }
 
-    // Advance to next substep
-    this.currentStep = this.getNextSubstep(snappedStep);
+    // Advance this sequence's position (respecting its loop markers)
+    state.currentStep = this.getNextSubstep(seq, snappedStep);
 
-    // Calculate next substep time
-    this.nextStepTime += this.substepDurationMs();
-
-    // Schedule next tick with 100ms lookahead
-    const scheduleTime = this.nextStepTime - 100;
-    this.scheduler.scheduleEvent(() => this.scheduleNextStep(), scheduleTime);
+    // Calculate next substep time for this sequence
+    state.nextStepTime += this.substepDurationMs();
   }
 
   /**
-   * Get the next substep, handling loop boundaries
+   * Get the next substep for a sequence, handling loop boundaries
    */
-  private getNextSubstep(currentSubstep: number): number {
+  private getNextSubstep(sequence: Sequence, currentSubstep: number): number {
     const substepIncrement = 1 / SUBSTEPS_PER_STEP;
     const nextSubstep = snapToSubstep(currentSubstep + substepIncrement);
 
-    const markers = this.sequence.getLoopMarkers();
+    const markers = sequence.getLoopMarkers();
     if (nextSubstep >= markers.end) {
       return markers.start;
     }

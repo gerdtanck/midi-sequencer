@@ -207,6 +207,55 @@ export class NoteGrid {
   }
 
   /**
+   * Switch to a different sequence for display and editing
+   * Used for multi-sequence support
+   */
+  setSequence(sequence: Sequence): void {
+    if (this.sequence === sequence) {
+      return; // Same sequence, no change needed
+    }
+
+    // Clear selection when switching sequences
+    if (this.selectionManager) {
+      this.selectionManager.clear();
+    }
+
+    // Update sequence reference
+    this.sequence = sequence;
+
+    // Update note renderer to use new sequence
+    if (this.noteRenderer && this.selectionManager) {
+      this.noteRenderer.dispose();
+      this.noteRenderer = new NoteRenderer(this.scene, sequence, this.config);
+      this.noteRenderer.setSelectionManager(this.selectionManager);
+
+      // Reconnect to note interaction controller
+      if (this.noteInteraction) {
+        this.noteInteraction.setNoteRenderer(this.noteRenderer);
+      }
+    }
+
+    // Update loop markers to use new sequence
+    if (this.loopMarkers) {
+      this.loopMarkers.dispose();
+      this.loopMarkers = new HtmlLoopMarkers(
+        this.container,
+        this.config,
+        sequence
+      );
+      this.loopMarkers.updateTransform(this.getCameraState());
+    }
+
+    // Re-subscribe to sequence changes
+    sequence.onChange(() => {
+      this.forceRender();
+    });
+
+    // Force re-render with new sequence
+    this.forceRender();
+  }
+
+  /**
    * Handle note toggle from click/tap
    */
   private onNoteToggle(cell: GridCell): void {
@@ -537,6 +586,16 @@ export class NoteGrid {
     const gridHeight = this.octaveCount * this.config.semitonesPerOctave;
     this.playbackIndicator.setPosition(step, gridHeight);
     this.forceRender();
+  }
+
+  /**
+   * Refresh loop markers display
+   * Call after externally modifying sequence loop markers
+   */
+  refreshLoopMarkers(): void {
+    if (this.loopMarkers) {
+      this.loopMarkers.updateTransform(this.getCameraState());
+    }
   }
 
   /**

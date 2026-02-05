@@ -229,6 +229,35 @@ body {
   filter: none;
 }
 
+/* Sequence selector buttons */
+.sequence-selector {
+  display: flex;
+  gap: 4px;
+}
+
+.sequence-btn {
+  flex: 1;
+  padding: 8px;
+  font-size: 1rem;
+  font-weight: bold;
+  background-color: var(--grid-background);
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+  color: var(--control-text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sequence-btn:hover {
+  background-color: var(--control-border);
+}
+
+.sequence-btn.active {
+  background-color: var(--control-accent);
+  border-color: var(--control-accent);
+  color: white;
+}
+
 /* BPM Control */
 .bpm-control {
   display: flex;
@@ -239,6 +268,33 @@ body {
 .bpm-control input[type='number'] {
   width: 80px;
   text-align: center;
+}
+
+/* Channel selector */
+.channel-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.channel-select {
+  width: 50px;
+  padding: 6px;
+  font-size: 0.9rem;
+  background-color: var(--grid-background);
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+  color: var(--control-text);
+}
+
+.channel-select:focus {
+  border-color: var(--control-accent);
+  outline: none;
+}
+
+.channel-select option {
+  background-color: var(--grid-background);
+  color: var(--control-text);
 }
 
 /* Device Select */

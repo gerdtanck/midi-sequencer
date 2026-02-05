@@ -1,13 +1,21 @@
 import type { PlaybackEngine } from '@/core/PlaybackEngine';
 import type { MidiManager } from '@/midi/MidiManager';
+import type { SequenceManager } from '@/core/SequenceManager';
 import type { NoteGrid } from '../grid/NoteGrid';
+
+/**
+ * Callback for sequence selection changes
+ */
+export type SequenceSelectCallback = (index: number) => void;
 
 /**
  * TransportControls - UI component for playback control
  *
  * Provides:
+ * - Sequence selector (1-4 buttons)
  * - Play/Stop button
  * - BPM control
+ * - MIDI channel selector
  * - MIDI device picker
  * - Panic button
  * - Undo/Redo buttons
@@ -16,11 +24,17 @@ export class TransportControls {
   private container: HTMLElement;
   private playbackEngine: PlaybackEngine;
   private midiManager: MidiManager;
+  private sequenceManager: SequenceManager | null = null;
   private noteGrid: NoteGrid | null = null;
 
+  // Callbacks
+  private onSequenceSelect: SequenceSelectCallback | null = null;
+
   // UI elements
+  private sequenceButtons: HTMLButtonElement[] = [];
   private playButton: HTMLButtonElement | null = null;
   private bpmInput: HTMLInputElement | null = null;
+  private channelSelect: HTMLSelectElement | null = null;
   private deviceSelect: HTMLSelectElement | null = null;
   private panicButton: HTMLButtonElement | null = null;
   private statusText: HTMLElement | null = null;
@@ -37,6 +51,20 @@ export class TransportControls {
     this.container = container;
     this.playbackEngine = playbackEngine;
     this.midiManager = midiManager;
+  }
+
+  /**
+   * Set the sequence manager for multi-sequence support
+   */
+  setSequenceManager(sequenceManager: SequenceManager): void {
+    this.sequenceManager = sequenceManager;
+  }
+
+  /**
+   * Set callback for sequence selection changes
+   */
+  setSequenceSelectCallback(callback: SequenceSelectCallback): void {
+    this.onSequenceSelect = callback;
   }
 
   /**
@@ -57,6 +85,27 @@ export class TransportControls {
   render(): void {
     this.container.innerHTML = '';
 
+    // Sequence selector section (4 buttons)
+    const sequenceSection = document.createElement('div');
+    sequenceSection.className = 'control-group';
+
+    const sequenceRow = document.createElement('div');
+    sequenceRow.className = 'sequence-selector';
+
+    this.sequenceButtons = [];
+    for (let i = 0; i < 4; i++) {
+      const btn = document.createElement('button');
+      btn.className = 'sequence-btn' + (i === 0 ? ' active' : '');
+      btn.textContent = String(i + 1);
+      btn.title = `Sequence ${i + 1}`;
+      btn.addEventListener('click', () => this.handleSequenceSelect(i));
+      sequenceRow.appendChild(btn);
+      this.sequenceButtons.push(btn);
+    }
+
+    sequenceSection.appendChild(sequenceRow);
+    this.container.appendChild(sequenceSection);
+
     // MIDI Status/Device section
     const midiSection = document.createElement('div');
     midiSection.className = 'control-group';
@@ -65,7 +114,7 @@ export class TransportControls {
     // Enable MIDI button (shown first, hidden after MIDI is enabled)
     this.enableMidiButton = document.createElement('button');
     this.enableMidiButton.className = 'transport-btn enable-midi';
-    this.enableMidiButton.textContent = '🎹 Enable MIDI';
+    this.enableMidiButton.textContent = 'Enable MIDI';
     this.enableMidiButton.addEventListener('click', () => this.onEnableMidiClick());
     midiSection.appendChild(this.enableMidiButton);
 
@@ -92,13 +141,13 @@ export class TransportControls {
 
     this.playButton = document.createElement('button');
     this.playButton.className = 'transport-btn';
-    this.playButton.textContent = '▶ Play';
+    this.playButton.textContent = 'Play';
     this.playButton.addEventListener('click', () => this.onPlayClick());
     transportRow.appendChild(this.playButton);
 
     this.panicButton = document.createElement('button');
     this.panicButton.className = 'transport-btn panic';
-    this.panicButton.textContent = '⬛ Stop All';
+    this.panicButton.textContent = 'Stop All';
     this.panicButton.addEventListener('click', () => this.onPanicClick());
     transportRow.appendChild(this.panicButton);
 
@@ -129,6 +178,35 @@ export class TransportControls {
     bpmSection.appendChild(bpmRow);
     this.container.appendChild(bpmSection);
 
+    // MIDI Channel section
+    const channelSection = document.createElement('div');
+    channelSection.className = 'control-group';
+
+    const channelRow = document.createElement('div');
+    channelRow.className = 'channel-control';
+
+    this.channelSelect = document.createElement('select');
+    this.channelSelect.className = 'channel-select';
+    for (let i = 1; i <= 16; i++) {
+      const opt = document.createElement('option');
+      opt.value = String(i - 1); // 0-based internally
+      opt.textContent = String(i); // 1-based display
+      this.channelSelect.appendChild(opt);
+    }
+    this.channelSelect.addEventListener('change', () => this.onChannelChange());
+    channelRow.appendChild(this.channelSelect);
+
+    const channelHint = document.createElement('span');
+    channelHint.className = 'control-hint';
+    channelHint.textContent = 'Ch';
+    channelRow.appendChild(channelHint);
+
+    channelSection.appendChild(channelRow);
+    this.container.appendChild(channelSection);
+
+    // Update channel select to show active sequence's channel
+    this.updateChannelSelect();
+
     // Edit section (Undo/Redo)
     const editSection = document.createElement('div');
     editSection.className = 'control-group';
@@ -138,7 +216,7 @@ export class TransportControls {
 
     this.undoButton = document.createElement('button');
     this.undoButton.className = 'transport-btn undo';
-    this.undoButton.textContent = '↩ Undo';
+    this.undoButton.textContent = 'Undo';
     this.undoButton.title = 'Undo (Ctrl+Z)';
     this.undoButton.disabled = true;
     this.undoButton.addEventListener('click', () => this.onUndoClick());
@@ -146,7 +224,7 @@ export class TransportControls {
 
     this.redoButton = document.createElement('button');
     this.redoButton.className = 'transport-btn redo';
-    this.redoButton.textContent = '↪ Redo';
+    this.redoButton.textContent = 'Redo';
     this.redoButton.title = 'Redo (Ctrl+Y)';
     this.redoButton.disabled = true;
     this.redoButton.addEventListener('click', () => this.onRedoClick());
@@ -162,7 +240,7 @@ export class TransportControls {
 
       this.fullscreenButton = document.createElement('button');
       this.fullscreenButton.className = 'transport-btn fullscreen';
-      this.fullscreenButton.textContent = '⛶ Fullscreen';
+      this.fullscreenButton.textContent = 'Fullscreen';
       this.fullscreenButton.addEventListener('click', () => this.onFullscreenClick());
       fullscreenSection.appendChild(this.fullscreenButton);
 
@@ -178,11 +256,68 @@ export class TransportControls {
   }
 
   /**
+   * Handle sequence button click
+   */
+  private handleSequenceSelect(index: number): void {
+    // Update button states
+    for (let i = 0; i < this.sequenceButtons.length; i++) {
+      if (i === index) {
+        this.sequenceButtons[i].classList.add('active');
+      } else {
+        this.sequenceButtons[i].classList.remove('active');
+      }
+    }
+
+    // Notify callback FIRST (this updates sequenceManager.activeIndex)
+    if (this.onSequenceSelect) {
+      this.onSequenceSelect(index);
+    }
+
+    // THEN update channel select to show this sequence's channel
+    this.updateChannelSelect();
+  }
+
+  /**
+   * Update channel select to reflect active sequence's MIDI channel
+   */
+  private updateChannelSelect(): void {
+    if (!this.channelSelect || !this.sequenceManager) return;
+
+    const activeSeq = this.sequenceManager.getActiveSequence();
+    this.channelSelect.value = String(activeSeq.getMidiChannel());
+  }
+
+  /**
+   * Handle channel selection change
+   */
+  private onChannelChange(): void {
+    if (!this.channelSelect || !this.sequenceManager) return;
+
+    const channel = parseInt(this.channelSelect.value, 10);
+    const activeSeq = this.sequenceManager.getActiveSequence();
+    activeSeq.setMidiChannel(channel);
+  }
+
+  /**
+   * Update active sequence button (called when sequence changes externally)
+   */
+  updateActiveSequence(index: number): void {
+    for (let i = 0; i < this.sequenceButtons.length; i++) {
+      if (i === index) {
+        this.sequenceButtons[i].classList.add('active');
+      } else {
+        this.sequenceButtons[i].classList.remove('active');
+      }
+    }
+    this.updateChannelSelect();
+  }
+
+  /**
    * Handle Enable MIDI button click
    */
   private async onEnableMidiClick(): Promise<void> {
     if (this.enableMidiButton) {
-      this.enableMidiButton.textContent = '⏳ Requesting...';
+      this.enableMidiButton.textContent = 'Requesting...';
       this.enableMidiButton.disabled = true;
     }
 
@@ -233,7 +368,7 @@ export class TransportControls {
     } else {
       // Show error, re-enable button
       if (this.enableMidiButton) {
-        this.enableMidiButton.textContent = '🎹 Enable MIDI';
+        this.enableMidiButton.textContent = 'Enable MIDI';
         this.enableMidiButton.disabled = false;
       }
       if (this.statusText) {
@@ -314,10 +449,10 @@ export class TransportControls {
     if (!this.playButton) return;
 
     if (isPlaying) {
-      this.playButton.textContent = '⬛ Stop';
+      this.playButton.textContent = 'Stop';
       this.playButton.classList.add('play');
     } else {
-      this.playButton.textContent = '▶ Play';
+      this.playButton.textContent = 'Play';
       this.playButton.classList.remove('play');
     }
   }
@@ -423,9 +558,9 @@ export class TransportControls {
     if (!this.fullscreenButton) return;
 
     if (this.isFullscreen()) {
-      this.fullscreenButton.textContent = '⛶ Exit Fullscreen';
+      this.fullscreenButton.textContent = 'Exit Fullscreen';
     } else {
-      this.fullscreenButton.textContent = '⛶ Fullscreen';
+      this.fullscreenButton.textContent = 'Fullscreen';
     }
   }
 
