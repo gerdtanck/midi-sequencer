@@ -84,38 +84,28 @@ export class TransformControls {
     targetRow.appendChild(this.targetSelect);
     section.appendChild(targetRow);
 
-    // Nudge row
-    const nudgeRow = document.createElement('div');
-    nudgeRow.className = 'transform-btn-row';
+    // Arrow cross (D-pad layout)
+    const arrowCross = document.createElement('div');
+    arrowCross.className = 'transform-arrow-cross';
+
+    this.transposeUpBtn = this.createButton('↑', 'Transpose up', () => this.transpose(1));
+    this.transposeUpBtn.className = 'transform-btn transform-arrow-up';
 
     this.nudgeLeftBtn = this.createButton('←', 'Nudge left', () => this.nudge(-1));
+    this.nudgeLeftBtn.className = 'transform-btn transform-arrow-left';
+
     this.nudgeRightBtn = this.createButton('→', 'Nudge right', () => this.nudge(1));
+    this.nudgeRightBtn.className = 'transform-btn transform-arrow-right';
 
-    const nudgeGroup = document.createElement('div');
-    nudgeGroup.className = 'transform-btn-group';
-    nudgeGroup.appendChild(this.nudgeLeftBtn);
-    const nudgeLabel = document.createElement('span');
-    nudgeLabel.className = 'transform-btn-label';
-    nudgeLabel.textContent = 'Nudge';
-    nudgeGroup.appendChild(nudgeLabel);
-    nudgeGroup.appendChild(this.nudgeRightBtn);
-    nudgeRow.appendChild(nudgeGroup);
-
-    // Transpose group
     this.transposeDownBtn = this.createButton('↓', 'Transpose down', () => this.transpose(-1));
-    this.transposeUpBtn = this.createButton('↑', 'Transpose up', () => this.transpose(1));
+    this.transposeDownBtn.className = 'transform-btn transform-arrow-down';
 
-    const transposeGroup = document.createElement('div');
-    transposeGroup.className = 'transform-btn-group';
-    transposeGroup.appendChild(this.transposeDownBtn);
-    const transposeLabel = document.createElement('span');
-    transposeLabel.className = 'transform-btn-label';
-    transposeLabel.textContent = 'Transpose';
-    transposeGroup.appendChild(transposeLabel);
-    transposeGroup.appendChild(this.transposeUpBtn);
-    nudgeRow.appendChild(transposeGroup);
+    arrowCross.appendChild(this.transposeUpBtn);
+    arrowCross.appendChild(this.nudgeLeftBtn);
+    arrowCross.appendChild(this.nudgeRightBtn);
+    arrowCross.appendChild(this.transposeDownBtn);
 
-    section.appendChild(nudgeRow);
+    section.appendChild(arrowCross);
 
     // Reverse and Randomize row
     const actionRow = document.createElement('div');
@@ -431,17 +421,33 @@ export class TransformControls {
         margin-bottom: 8px;
       }
 
-      .transform-btn-group {
-        display: flex;
-        align-items: center;
+      .transform-arrow-cross {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-rows: auto auto auto;
         gap: 4px;
-        flex: 1;
+        width: fit-content;
+        margin: 0 auto 8px auto;
       }
 
-      .transform-btn-label {
-        font-size: 0.75rem;
-        color: var(--control-text);
-        white-space: nowrap;
+      .transform-arrow-up {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      .transform-arrow-left {
+        grid-column: 1;
+        grid-row: 2;
+      }
+
+      .transform-arrow-right {
+        grid-column: 3;
+        grid-row: 2;
+      }
+
+      .transform-arrow-down {
+        grid-column: 2;
+        grid-row: 3;
       }
 
       .transform-btn {
