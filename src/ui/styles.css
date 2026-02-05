@@ -353,6 +353,59 @@ body {
   color: white;
 }
 
+/* Loop Markers Styles */
+.loop-markers-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.loop-marker {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 24px;
+  margin-left: -12px; /* Center on position */
+  cursor: ew-resize;
+  pointer-events: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.loop-marker-line {
+  width: 3px;
+  height: 100%;
+  background: #ffa500;
+  opacity: 0.9;
+  border-radius: 1px;
+}
+
+.loop-marker:hover .loop-marker-line {
+  width: 5px;
+  background: #ffb833;
+  box-shadow: 0 0 8px rgba(255, 165, 0, 0.5);
+}
+
+.loop-marker.dragging .loop-marker-line {
+  width: 5px;
+  background: #ffcc00;
+  box-shadow: 0 0 12px rgba(255, 165, 0, 0.7);
+}
+
+.loop-region-overlay {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: rgba(255, 165, 0, 0.04);
+  pointer-events: none;
+  border-left: 1px solid rgba(255, 165, 0, 0.1);
+  border-right: 1px solid rgba(255, 165, 0, 0.1);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   #controls-panel {

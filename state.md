@@ -33,7 +33,7 @@ A browser-based MIDI step sequencer built with TypeScript, Three.js, and Web MID
 - **Piano Keys Overlay**: Interactive sidebar showing note names, synced with grid scroll
 - **Bar Indicators**: Top bar showing measure numbers
 - **Playback Indicator**: Green vertical line showing current position
-- **Loop Markers**: Orange vertical lines (draggable) marking loop region
+- **Loop Markers**: Orange vertical lines (draggable) marking loop region (HTML-based overlay)
 
 ### Note Audition
 - Notes play when created (click on empty grid)
@@ -82,11 +82,11 @@ src/
 │   │   ├── GridControls.ts    # Pan/zoom handling
 │   │   ├── NoteRenderer.ts    # Note mesh management
 │   │   ├── NoteInteractionController.ts  # Click/drag/resize
-│   │   ├── PlaybackIndicator.ts
-│   │   └── LoopMarkersOverlay.ts  # Draggable loop region
+│   │   └── PlaybackIndicator.ts
 │   ├── overlays/
 │   │   ├── PianoKeys.ts       # Piano keyboard sidebar
-│   │   └── BarIndicators.ts   # Measure numbers
+│   │   ├── BarIndicators.ts   # Measure numbers
+│   │   └── HtmlLoopMarkers.ts # Draggable loop region (HTML-based)
 │   ├── controls/
 │   │   └── TransportControls.ts  # Play/stop, BPM, undo/redo, fullscreen
 │   └── input/
@@ -107,23 +107,7 @@ src/
 
 ## Known Issues
 
-### Loop Marker Mobile Bug (Unresolved)
-**Symptom**: After dragging a loop marker to a new position on mobile, the next tap on the grid causes the moved marker to shift one additional step in the same direction it was previously moved.
-
-**Observations**:
-- Not immediately after the drag - happens on the NEXT interaction
-- Consistently moves in the direction of the previous drag
-- Only happens on mobile (touch events)
-
-**Attempted Fixes (all reverted)**:
-1. Ignoring synthetic events within 100ms of drag end - didn't help
-2. Requiring minimum movement threshold before position updates - didn't help
-
-**Suspected Causes to Investigate**:
-- Some state being retained from previous drag
-- Event listener ordering/priority issues
-- Touch event peculiarities on mobile browsers
-- Possible interaction between LoopMarkersOverlay and other touch handlers
+None currently.
 
 ## Configuration
 
@@ -152,7 +136,7 @@ npm run preview  # Preview production build
 
 ## Next Steps / Ideas
 
-1. **Fix loop marker mobile bug** - needs deeper investigation
+1. **Fix loop marker bug** - needs deeper investigation
 2. **Save/Load sequences** - localStorage or file export
 3. **Multiple sequences/tracks** - currently single sequence
 4. **Velocity editing** - visual representation and editing
