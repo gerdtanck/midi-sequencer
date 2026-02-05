@@ -18,6 +18,7 @@ import {
   MoveNotesCommand,
   ResizeNoteCommand,
   PasteNotesCommand,
+  ChangeVelocityCommand,
 } from '@/core/commands';
 
 /**
@@ -167,6 +168,11 @@ export class NoteGrid {
       this.onNotePaste(targetStep, targetPitch);
     });
 
+    // Wire up velocity callback
+    this.noteInteraction.setNoteVelocityCallback((notes, deltaVelocity) => {
+      this.onNoteVelocity(notes, deltaVelocity);
+    });
+
     // Wire up render callback for live resize preview
     this.noteInteraction.setRenderCallback(() => {
       this.forceRender();
@@ -236,6 +242,20 @@ export class NoteGrid {
     if (!note) return;
 
     const command = new ResizeNoteCommand(this.sequence, step, pitch, note.duration, newDuration);
+    this.commandHistory.execute(command);
+    this.forceRender();
+  }
+
+  /**
+   * Handle velocity change from Ctrl+drag or mobile long-press+drag
+   */
+  private onNoteVelocity(
+    notes: Array<{ step: number; pitch: number; oldVelocity: number }>,
+    deltaVelocity: number
+  ): void {
+    if (!this.sequence) return;
+
+    const command = new ChangeVelocityCommand(this.sequence, notes, deltaVelocity);
     this.commandHistory.execute(command);
     this.forceRender();
   }

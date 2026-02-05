@@ -9,6 +9,8 @@ import {
   HANDLE_COLOR,
   NOTE_Z_POSITION,
   HANDLE_Z_POSITION,
+  MAX_VELOCITY,
+  VELOCITY_BRIGHTNESS_MIN,
 } from '@/config/GridConfig';
 import { isTouchDevice } from '@/utils';
 
@@ -19,6 +21,7 @@ interface NoteMeshData {
   step: number;
   pitch: number;
   duration: number;
+  velocity: number;
 }
 
 /**
@@ -104,15 +107,36 @@ export class NoteRenderer {
   }
 
   /**
+   * Apply velocity-based brightness to a color
+   * Velocity 1 → 40% brightness, velocity 127 → 100% brightness
+   */
+  private velocityToColor(baseColor: number, velocity: number): number {
+    const brightness = VELOCITY_BRIGHTNESS_MIN + (velocity / MAX_VELOCITY) * (1 - VELOCITY_BRIGHTNESS_MIN);
+
+    // Extract RGB components
+    const r = (baseColor >> 16) & 0xff;
+    const g = (baseColor >> 8) & 0xff;
+    const b = baseColor & 0xff;
+
+    // Apply brightness
+    const newR = Math.round(r * brightness);
+    const newG = Math.round(g * brightness);
+    const newB = Math.round(b * brightness);
+
+    return (newR << 16) | (newG << 8) | newB;
+  }
+
+  /**
    * Create a mesh for a note
    */
-  private createNoteMesh(step: number, pitch: number, duration: number): THREE.Mesh {
+  private createNoteMesh(step: number, pitch: number, duration: number, velocity: number): THREE.Mesh {
     // Clone material so we can modify individual notes later if needed
     const material = this.noteMaterial.clone();
 
-    // Set color based on selection state
+    // Set color based on selection state, with velocity-based brightness
     const isSelected = this.selectionManager?.isSelected(step, pitch) ?? false;
-    material.color.setHex(isSelected ? this.noteSelectedColor : this.noteColor);
+    const baseColor = isSelected ? this.noteSelectedColor : this.noteColor;
+    material.color.setHex(this.velocityToColor(baseColor, velocity));
 
     const mesh = new THREE.Mesh(this.noteGeometry, material);
 
@@ -132,8 +156,8 @@ export class NoteRenderer {
     mesh.position.set(x, y, this.noteZPosition);
     mesh.scale.set(noteWidth, noteHeight, 1);
 
-    // Store identification data including duration
-    mesh.userData = { step, pitch, duration } as NoteMeshData;
+    // Store identification data including duration and velocity
+    mesh.userData = { step, pitch, duration, velocity } as NoteMeshData;
 
     return mesh;
   }
@@ -167,14 +191,14 @@ export class NoteRenderer {
   /**
    * Add a note mesh to the scene
    */
-  private addNoteMesh(step: number, pitch: number, duration: number): void {
+  private addNoteMesh(step: number, pitch: number, duration: number, velocity: number): void {
     const key = this.getNoteKey(step, pitch);
 
     // Remove existing mesh if any
     this.removeNoteMesh(step, pitch);
 
     // Create and add note mesh
-    const mesh = this.createNoteMesh(step, pitch, duration);
+    const mesh = this.createNoteMesh(step, pitch, duration, velocity);
     this.noteGroup.add(mesh);
     this.noteMeshes.set(key, mesh);
 
@@ -235,8 +259,29 @@ export class NoteRenderer {
         }
       }
     } else {
-      // Mesh doesn't exist, create it
-      this.addNoteMesh(step, pitch, duration);
+      // Mesh doesn't exist, get velocity from sequence and create it
+      const note = this.sequence.getNoteAt(step, pitch);
+      const velocity = note?.velocity ?? 100;
+      this.addNoteMesh(step, pitch, duration, velocity);
+    }
+  }
+
+  /**
+   * Update a note's velocity visual (brightness)
+   * Public for velocity editing feature
+   */
+  updateNoteVelocity(step: number, pitch: number, velocity: number): void {
+    const key = this.getNoteKey(step, pitch);
+    const mesh = this.noteMeshes.get(key);
+
+    if (mesh) {
+      const data = mesh.userData as NoteMeshData;
+      data.velocity = velocity;
+
+      const isSelected = this.selectionManager?.isSelected(step, pitch) ?? false;
+      const baseColor = isSelected ? this.noteSelectedColor : this.noteColor;
+      const color = this.velocityToColor(baseColor, velocity);
+      (mesh.material as THREE.MeshBasicMaterial).color.setHex(color);
     }
   }
 
@@ -268,7 +313,7 @@ export class NoteRenderer {
     const allNotes = this.sequence.getAllNotes();
     for (const { step, notes } of allNotes) {
       for (const note of notes) {
-        this.addNoteMesh(step, note.pitch, note.duration);
+        this.addNoteMesh(step, note.pitch, note.duration, note.velocity);
       }
     }
   }
@@ -325,6 +370,7 @@ export class NoteRenderer {
     step: number;
     pitch: number;
     duration: number;
+    velocity: number;
     isNearHandle: boolean;
   } | null {
     const semitone = Math.floor(worldY);
@@ -348,6 +394,7 @@ export class NoteRenderer {
           step: data.step,
           pitch: data.pitch,
           duration: data.duration,
+          velocity: data.velocity,
           isNearHandle,
         };
       }
@@ -383,13 +430,14 @@ export class NoteRenderer {
   }
 
   /**
-   * Update note colors based on selection state
+   * Update note colors based on selection state, preserving velocity-based brightness
    */
   private updateSelectionColors(): void {
     for (const [_key, mesh] of this.noteMeshes) {
       const data = mesh.userData as NoteMeshData;
       const isSelected = this.selectionManager?.isSelected(data.step, data.pitch) ?? false;
-      const color = isSelected ? this.noteSelectedColor : this.noteColor;
+      const baseColor = isSelected ? this.noteSelectedColor : this.noteColor;
+      const color = this.velocityToColor(baseColor, data.velocity);
       (mesh.material as THREE.MeshBasicMaterial).color.setHex(color);
     }
   }

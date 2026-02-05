@@ -48,6 +48,10 @@ export const DEFAULT_NOTE_DURATION = 0.8;      // Default duration for new notes
 
 // Velocity
 export const DEFAULT_NOTE_VELOCITY = 100;      // Default velocity (0-127)
+export const MIN_VELOCITY = 1;                 // Minimum velocity
+export const MAX_VELOCITY = 127;               // Maximum velocity
+export const VELOCITY_BRIGHTNESS_MIN = 0.4;    // Brightness at velocity 1 (40%)
+export const PIXELS_PER_VELOCITY = 2;          // Pixels of drag per velocity unit
 
 // ============ Visual Constants ============
 

@@ -4,3 +4,4 @@ export { AddNoteCommand, RemoveNoteCommand } from './ToggleNoteCommand';
 export { MoveNotesCommand } from './MoveNotesCommand';
 export { ResizeNoteCommand } from './ResizeNoteCommand';
 export { PasteNotesCommand } from './PasteNotesCommand';
+export { ChangeVelocityCommand } from './ChangeVelocityCommand';

@@ -7,6 +7,9 @@ import {
   HANDLE_ZONE_WIDTH,
   MIN_NOTE_DURATION,
   MAX_NOTE_DURATION,
+  MIN_VELOCITY,
+  MAX_VELOCITY,
+  PIXELS_PER_VELOCITY,
   SELECTION_RECT_COLOR,
   SELECTION_RECT_OPACITY,
   SELECTION_RECT_Z_POSITION,
@@ -36,6 +39,10 @@ export type NoteMoveCallback = (
 ) => void;
 export type NotePasteCallback = (targetStep: number, targetPitch: number) => void;
 export type NoteAuditionCallback = (pitches: number[]) => void; // Empty array = stop audition
+export type NoteVelocityCallback = (
+  notes: Array<{ step: number; pitch: number; oldVelocity: number }>,
+  deltaVelocity: number
+) => void;
 
 /**
  * Interaction modes
@@ -45,7 +52,8 @@ type InteractionMode =
   | 'pan' // Grid panning (handled by GridControls)
   | 'resize' // Resizing a note
   | 'drag' // Dragging note(s)
-  | 'select-rect'; // Selection rectangle
+  | 'select-rect' // Selection rectangle
+  | 'ctrl-edit'; // Ctrl+drag for velocity (vertical) and length (horizontal)
 
 /**
  * NoteInteractionController - Handles all note interactions
@@ -89,11 +97,17 @@ export class NoteInteractionController {
   private pointerStartY = 0;
   private pointerMoved = false;
   private shiftKey = false;
+  private ctrlKey = false;
   private pointerButton = 0; // 0=left, 2=right
 
   // Resize state
   private resizeNote: { step: number; pitch: number; startDuration: number } | null = null;
   private resizeStartWorldX = 0;
+
+  // Ctrl-edit state (velocity + length editing)
+  private ctrlEditNotes: Array<{ step: number; pitch: number; startVelocity: number; startDuration: number }> = [];
+  private ctrlEditStartY = 0;
+  private ctrlEditStartX = 0;
 
   // Drag state
   private dragNotes: Array<{ step: number; pitch: number }> = [];
@@ -128,6 +142,7 @@ export class NoteInteractionController {
   private onNoteMove: NoteMoveCallback | null = null;
   private onNotePaste: NotePasteCallback | null = null;
   private onNoteAudition: NoteAuditionCallback | null = null;
+  private onNoteVelocity: NoteVelocityCallback | null = null;
   private onRenderRequest: (() => void) | null = null;
   private onCancelPan: (() => void) | null = null;
 
@@ -190,6 +205,10 @@ export class NoteInteractionController {
 
   setNoteAuditionCallback(callback: NoteAuditionCallback): void {
     this.onNoteAudition = callback;
+  }
+
+  setNoteVelocityCallback(callback: NoteVelocityCallback): void {
+    this.onNoteVelocity = callback;
   }
 
   setRenderCallback(callback: () => void): void {
@@ -284,6 +303,7 @@ export class NoteInteractionController {
     this.pointerStartY = pos.y;
     this.pointerMoved = false;
     this.shiftKey = 'shiftKey' in e && e.shiftKey;
+    this.ctrlKey = 'ctrlKey' in e && e.ctrlKey;
     this.pointerButton = 'button' in e ? e.button : 0;
     this.mode = 'none';
     this.selectRectWasUsed = false;
@@ -307,7 +327,7 @@ export class NoteInteractionController {
   private handlePCPointerDown(
     e: MouseEvent | TouchEvent,
     world: { x: number; y: number },
-    noteAtPos: { step: number; pitch: number; duration: number; isNearHandle: boolean } | null
+    noteAtPos: { step: number; pitch: number; duration: number; velocity: number; isNearHandle: boolean } | null
   ): void {
     if (noteAtPos) {
       if (noteAtPos.isNearHandle) {
@@ -321,6 +341,34 @@ export class NoteInteractionController {
         this.resizeStartWorldX = world.x;
         e.stopPropagation();
         this.domElement.style.cursor = 'ew-resize';
+      } else if (this.ctrlKey) {
+        // Ctrl+click on note body - enter ctrl-edit mode for velocity/length
+        this.mode = 'ctrl-edit';
+        this.ctrlEditStartY = this.pointerStartY;
+        this.ctrlEditStartX = world.x;
+
+        // Get all notes to edit (selected notes if clicked note is selected, else just this note)
+        if (this.selectionManager?.isSelected(noteAtPos.step, noteAtPos.pitch)) {
+          const selectedNotes = this.selectionManager.getSelectedNotes();
+          this.ctrlEditNotes = selectedNotes.map(n => {
+            const noteData = this.noteRenderer?.getNoteAtWorld(n.step + 0.5, n.pitch - 36 + 0.5, 0);
+            return {
+              step: n.step,
+              pitch: n.pitch,
+              startVelocity: noteData?.velocity ?? 100,
+              startDuration: noteData?.duration ?? 0.8,
+            };
+          });
+        } else {
+          this.ctrlEditNotes = [{
+            step: noteAtPos.step,
+            pitch: noteAtPos.pitch,
+            startVelocity: noteAtPos.velocity,
+            startDuration: noteAtPos.duration,
+          }];
+        }
+        e.stopPropagation();
+        this.domElement.style.cursor = 'ns-resize';
       } else {
         // Prepare for potential drag
         this.mode = 'drag';
@@ -357,7 +405,7 @@ export class NoteInteractionController {
     _e: MouseEvent | TouchEvent,
     pos: { x: number; y: number },
     world: { x: number; y: number },
-    noteAtPos: { step: number; pitch: number; duration: number; isNearHandle: boolean } | null
+    noteAtPos: { step: number; pitch: number; duration: number; velocity: number; isNearHandle: boolean } | null
   ): void {
     // Check for double-tap
     const now = Date.now();
@@ -417,18 +465,39 @@ export class NoteInteractionController {
   // ============ Long Press Handlers ============
 
   private handleLongPressOnNote(
-    noteAtPos: { step: number; pitch: number; duration: number }
+    noteAtPos: { step: number; pitch: number; duration: number; velocity: number }
   ): void {
     if (this.pointerMoved) return;
 
     this.longPressTriggered = true;
-    this.mode = 'resize';
-    this.resizeNote = {
-      step: noteAtPos.step,
-      pitch: noteAtPos.pitch,
-      startDuration: noteAtPos.duration,
-    };
-    this.resizeStartWorldX = noteAtPos.step + noteAtPos.duration;
+    // Use ctrl-edit mode for mobile long-press (supports both velocity and length)
+    this.mode = 'ctrl-edit';
+    this.ctrlEditStartY = this.pointerStartY;
+
+    // Get world X for the note's right edge (for horizontal length editing)
+    const world = this.toWorld(this.pointerStartX, this.pointerStartY);
+    this.ctrlEditStartX = world.x;
+
+    // Get all notes to edit (selected notes if clicked note is selected, else just this note)
+    if (this.selectionManager?.isSelected(noteAtPos.step, noteAtPos.pitch)) {
+      const selectedNotes = this.selectionManager.getSelectedNotes();
+      this.ctrlEditNotes = selectedNotes.map(n => {
+        const noteData = this.noteRenderer?.getNoteAtWorld(n.step + 0.5, n.pitch - 36 + 0.5, 0);
+        return {
+          step: n.step,
+          pitch: n.pitch,
+          startVelocity: noteData?.velocity ?? 100,
+          startDuration: noteData?.duration ?? 0.8,
+        };
+      });
+    } else {
+      this.ctrlEditNotes = [{
+        step: noteAtPos.step,
+        pitch: noteAtPos.pitch,
+        startVelocity: noteAtPos.velocity,
+        startDuration: noteAtPos.duration,
+      }];
+    }
     this.dragNotes = [];
 
     this.onCancelPan?.();
@@ -437,7 +506,7 @@ export class NoteInteractionController {
       navigator.vibrate(50);
     }
 
-    this.domElement.style.cursor = 'ew-resize';
+    this.domElement.style.cursor = 'ns-resize';
   }
 
   private handleLongPressPaste(_world: { x: number; y: number }): void {
@@ -581,6 +650,9 @@ export class NoteInteractionController {
       case 'select-rect':
         this.handleSelectRectMove(e, world);
         break;
+      case 'ctrl-edit':
+        this.handleCtrlEditMove(e, pos, world);
+        break;
     }
   }
 
@@ -653,6 +725,48 @@ export class NoteInteractionController {
     }
   }
 
+  private handleCtrlEditMove(
+    e: MouseEvent | TouchEvent,
+    pos: { x: number; y: number },
+    world: { x: number; y: number }
+  ): void {
+    if (this.ctrlEditNotes.length === 0) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    this.onCancelPan?.();
+
+    // Calculate deltas
+    const deltaPixelsY = pos.y - this.ctrlEditStartY;
+    const deltaWorldX = world.x - this.ctrlEditStartX;
+
+    // Vertical drag = velocity change (up = increase, so negate)
+    const deltaVelocity = Math.round(-deltaPixelsY / PIXELS_PER_VELOCITY);
+
+    // Horizontal drag = length change
+    const deltaDuration = deltaWorldX;
+
+    // Update visual for each note
+    if (this.noteRenderer) {
+      for (const note of this.ctrlEditNotes) {
+        // Update velocity visual
+        const newVelocity = Math.max(
+          MIN_VELOCITY,
+          Math.min(MAX_VELOCITY, note.startVelocity + deltaVelocity)
+        );
+        this.noteRenderer.updateNoteVelocity(note.step, note.pitch, newVelocity);
+
+        // Update duration visual
+        const newDuration = Math.max(
+          MIN_NOTE_DURATION,
+          Math.min(MAX_NOTE_DURATION, note.startDuration + deltaDuration)
+        );
+        this.noteRenderer.updateNoteMesh(note.step, note.pitch, newDuration);
+      }
+      this.onRenderRequest?.();
+    }
+  }
+
   // ============ Pointer Up ============
 
   private onPointerUp(e: MouseEvent | TouchEvent): void {
@@ -672,6 +786,9 @@ export class NoteInteractionController {
         break;
       case 'select-rect':
         this.handleSelectRectEnd(world);
+        break;
+      case 'ctrl-edit':
+        this.handleCtrlEditEnd(pos, world);
         break;
       default:
         // No mode - might be a simple click
@@ -694,6 +811,43 @@ export class NoteInteractionController {
 
     if (this.onNoteResize) {
       this.onNoteResize(this.resizeNote.step, this.resizeNote.pitch, newDuration);
+    }
+
+    this.domElement.style.cursor = 'pointer';
+  }
+
+  private handleCtrlEditEnd(pos: { x: number; y: number }, world: { x: number; y: number }): void {
+    if (this.ctrlEditNotes.length === 0) return;
+
+    // Calculate final deltas
+    const deltaPixelsY = pos.y - this.ctrlEditStartY;
+    const deltaWorldX = world.x - this.ctrlEditStartX;
+    const deltaVelocity = Math.round(-deltaPixelsY / PIXELS_PER_VELOCITY);
+    const deltaDuration = deltaWorldX;
+
+    // Only commit changes if there was actual movement
+    const hasVelocityChange = deltaVelocity !== 0;
+    const hasDurationChange = Math.abs(deltaDuration) > 0.01;
+
+    if (hasVelocityChange && this.onNoteVelocity) {
+      // Prepare notes with their original velocities for the command
+      const notesWithVelocity = this.ctrlEditNotes.map(n => ({
+        step: n.step,
+        pitch: n.pitch,
+        oldVelocity: n.startVelocity,
+      }));
+      this.onNoteVelocity(notesWithVelocity, deltaVelocity);
+    }
+
+    if (hasDurationChange && this.onNoteResize) {
+      // Commit duration changes for each note
+      for (const note of this.ctrlEditNotes) {
+        const newDuration = Math.max(
+          MIN_NOTE_DURATION,
+          Math.min(MAX_NOTE_DURATION, note.startDuration + deltaDuration)
+        );
+        this.onNoteResize(note.step, note.pitch, newDuration);
+      }
     }
 
     this.domElement.style.cursor = 'pointer';
@@ -840,6 +994,7 @@ export class NoteInteractionController {
     this.mode = 'none';
     this.resizeNote = null;
     this.dragNotes = [];
+    this.ctrlEditNotes = [];
     this.selectRectStart = null;
     this.longPressTriggered = false;
   }
