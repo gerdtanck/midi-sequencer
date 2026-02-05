@@ -218,20 +218,22 @@ export class PlaybackEngine {
     const notes = seq.getNotesAt(snappedStep);
     const channel = seq.getMidiChannel();
 
-    // Schedule each note
+    // Schedule each note with precise timestamps
+    const noteOnTime = state.nextStepTime;
     for (const note of notes) {
       // Duration is relative to full steps, convert to ms
       const durationMs = this.fullStepDurationMs() * note.duration;
+      const noteOffTime = noteOnTime + durationMs;
 
-      // Schedule note on
+      // Schedule note on with timestamp for precise timing
       this.scheduler.scheduleEvent(() => {
-        this.midiManager.sendNoteOn(channel, note.pitch, note.velocity);
-      }, state.nextStepTime);
+        this.midiManager.sendNoteOn(channel, note.pitch, note.velocity, noteOnTime);
+      }, noteOnTime);
 
-      // Schedule note off
+      // Schedule note off with timestamp for precise timing
       this.scheduler.scheduleEvent(() => {
-        this.midiManager.sendNoteOff(channel, note.pitch);
-      }, state.nextStepTime + durationMs);
+        this.midiManager.sendNoteOff(channel, note.pitch, noteOffTime);
+      }, noteOffTime);
     }
 
     // Notify position change for active sequence only (on full steps)

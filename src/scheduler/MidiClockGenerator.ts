@@ -102,16 +102,19 @@ export class MidiClockGenerator {
     const msPerQuarter = (60 / this.bpm) * 1000;
     const msPerClock = msPerQuarter / 24;
 
+    // Capture current clock time in closure (before incrementing)
+    const clockTime = this.nextClockTime;
+
     // Schedule the clock event
     this.scheduler.scheduleEvent(() => {
-      // Send MIDI Clock message (0xF8)
-      this.midiManager.sendClock(this.nextClockTime);
+      // Send MIDI Clock message (0xF8) with correct timestamp
+      this.midiManager.sendClock(clockTime);
 
       // Chain: schedule the next clock
       this.scheduleNextClock();
-    }, this.nextClockTime);
+    }, clockTime);
 
-    // Update next clock time
+    // Update next clock time for subsequent scheduling
     this.nextClockTime += msPerClock;
   }
 }
