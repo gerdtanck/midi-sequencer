@@ -2,6 +2,7 @@ import type { Command } from './Command';
 import type { Sequence } from '../Sequence';
 import type { SelectionManager } from '../SelectionManager';
 import type { ScaleManager } from '../ScaleManager';
+import { snapToSubstep } from '@/utils';
 
 /**
  * Command to move one or more notes by a delta
@@ -69,7 +70,7 @@ export class MoveNotesCommand implements Command {
         newPitch = newOriginalPitch;
       }
 
-      const newStep = step + this.deltaStep;
+      const newStep = snapToSubstep(step + this.deltaStep);
 
       // Store complete state including velocity and duration
       this.movedNotes.push({
