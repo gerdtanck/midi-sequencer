@@ -121,23 +121,21 @@ export class HtmlLoopMarkers {
 
   private onPointerUp = (e: PointerEvent): void => {
     if (this.dragging) {
-      const marker = this.dragging === 'start' ? this.startMarker : this.endMarker;
-      marker.classList.remove('dragging');
       try {
+        const marker = this.dragging === 'start' ? this.startMarker : this.endMarker;
         marker.releasePointerCapture(e.pointerId);
       } catch {
         // Pointer capture may already be released
       }
-      this.dragging = null;
     }
+    this.clearDragState();
   };
 
   private clearDragState = (): void => {
-    if (this.dragging) {
-      const marker = this.dragging === 'start' ? this.startMarker : this.endMarker;
-      marker.classList.remove('dragging');
-      this.dragging = null;
-    }
+    // Always clear both markers to ensure no stuck states
+    this.startMarker.classList.remove('dragging');
+    this.endMarker.classList.remove('dragging');
+    this.dragging = null;
   };
 
   /**

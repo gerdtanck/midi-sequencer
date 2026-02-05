@@ -385,10 +385,13 @@ body {
   border-radius: 1px;
 }
 
-.loop-marker:hover .loop-marker-line {
-  width: 5px;
-  background: #ffb833;
-  box-shadow: 0 0 8px rgba(255, 165, 0, 0.5);
+/* Only apply hover on devices that support it (not touch) */
+@media (hover: hover) {
+  .loop-marker:hover .loop-marker-line {
+    width: 5px;
+    background: #ffb833;
+    box-shadow: 0 0 8px rgba(255, 165, 0, 0.5);
+  }
 }
 
 .loop-marker.dragging .loop-marker-line {
