@@ -62,10 +62,6 @@ export class TransportControls {
     midiSection.className = 'control-group';
     midiSection.id = 'midi-section';
 
-    const midiLabel = document.createElement('label');
-    midiLabel.textContent = 'MIDI Output';
-    midiSection.appendChild(midiLabel);
-
     // Enable MIDI button (shown first, hidden after MIDI is enabled)
     this.enableMidiButton = document.createElement('button');
     this.enableMidiButton.className = 'transport-btn enable-midi';
@@ -91,10 +87,6 @@ export class TransportControls {
     const transportSection = document.createElement('div');
     transportSection.className = 'control-group';
 
-    const transportLabel = document.createElement('label');
-    transportLabel.textContent = 'Transport';
-    transportSection.appendChild(transportLabel);
-
     const transportRow = document.createElement('div');
     transportRow.className = 'transport-controls';
 
@@ -117,11 +109,6 @@ export class TransportControls {
     const bpmSection = document.createElement('div');
     bpmSection.className = 'control-group';
 
-    const bpmLabel = document.createElement('label');
-    bpmLabel.htmlFor = 'bpm-input';
-    bpmLabel.textContent = 'BPM';
-    bpmSection.appendChild(bpmLabel);
-
     const bpmRow = document.createElement('div');
     bpmRow.className = 'bpm-control';
 
@@ -136,7 +123,7 @@ export class TransportControls {
 
     const bpmHint = document.createElement('span');
     bpmHint.className = 'control-hint';
-    bpmHint.textContent = '(40-240)';
+    bpmHint.textContent = 'BPM';
     bpmRow.appendChild(bpmHint);
 
     bpmSection.appendChild(bpmRow);
@@ -145,10 +132,6 @@ export class TransportControls {
     // Edit section (Undo/Redo)
     const editSection = document.createElement('div');
     editSection.className = 'control-group';
-
-    const editLabel = document.createElement('label');
-    editLabel.textContent = 'Edit';
-    editSection.appendChild(editLabel);
 
     const editRow = document.createElement('div');
     editRow.className = 'transport-controls';
@@ -177,20 +160,11 @@ export class TransportControls {
       const fullscreenSection = document.createElement('div');
       fullscreenSection.className = 'control-group';
 
-      const fullscreenLabel = document.createElement('label');
-      fullscreenLabel.textContent = 'View';
-      fullscreenSection.appendChild(fullscreenLabel);
-
       this.fullscreenButton = document.createElement('button');
       this.fullscreenButton.className = 'transport-btn fullscreen';
       this.fullscreenButton.textContent = '⛶ Fullscreen';
       this.fullscreenButton.addEventListener('click', () => this.onFullscreenClick());
       fullscreenSection.appendChild(this.fullscreenButton);
-
-      const fullscreenHint = document.createElement('div');
-      fullscreenHint.className = 'control-hint';
-      fullscreenHint.textContent = 'Or add to home screen for best experience';
-      fullscreenSection.appendChild(fullscreenHint);
 
       this.container.appendChild(fullscreenSection);
 
@@ -246,14 +220,11 @@ export class TransportControls {
         this.deviceSelect.style.display = '';
       }
 
-      // Enable playback controls
-      this.setControlsEnabled(true);
-
       this.updateDeviceList();
       if (this.statusText) {
         const devices = this.midiManager.getDevices();
         this.statusText.textContent =
-          devices.length > 0 ? `${devices.length} device(s) found` : 'No MIDI devices found';
+          devices.length > 0 ? 'Select a MIDI device' : 'No MIDI devices found';
       }
 
       // Listen for device changes
@@ -300,14 +271,6 @@ export class TransportControls {
       this.deviceSelect.appendChild(option);
     }
 
-    // Auto-select first device if none selected
-    if (!selectedDevice && devices.length > 0) {
-      this.midiManager.selectDevice(devices[0].id);
-      this.deviceSelect.value = devices[0].id;
-      if (this.statusText) {
-        this.statusText.textContent = `Selected: ${devices[0].name}`;
-      }
-    }
   }
 
   /**
@@ -319,10 +282,15 @@ export class TransportControls {
     const deviceId = this.deviceSelect.value;
     if (deviceId) {
       this.midiManager.selectDevice(deviceId);
-      const device = this.midiManager.getSelectedDevice();
-      if (this.statusText && device) {
-        this.statusText.textContent = `Selected: ${device.name}`;
+
+      // Hide MIDI section after device is selected
+      const midiSection = document.getElementById('midi-section');
+      if (midiSection) {
+        midiSection.style.display = 'none';
       }
+
+      // Enable playback controls
+      this.setControlsEnabled(true);
     }
   }
 

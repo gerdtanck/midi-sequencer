@@ -33,10 +33,6 @@ export class ScaleSelector {
     const scaleSection = document.createElement('div');
     scaleSection.className = 'control-group';
 
-    const label = document.createElement('label');
-    label.textContent = 'Scale';
-    scaleSection.appendChild(label);
-
     // Controls row
     const controlsRow = document.createElement('div');
     controlsRow.className = 'scale-controls';

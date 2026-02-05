@@ -578,6 +578,22 @@ body {
   accent-color: var(--control-accent);
 }
 
+/* View Controls - Bars and Octaves on same row */
+.view-controls {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.view-controls label {
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.view-controls input[type='number'] {
+  width: 60px;
+}
+
 /* Landscape phone optimization */
 @media (max-height: 500px) and (orientation: landscape) {
   #app {

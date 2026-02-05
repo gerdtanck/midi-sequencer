@@ -52,18 +52,13 @@ export class TransformControls {
     const section = document.createElement('div');
     section.className = 'control-group';
 
-    // Header
-    const label = document.createElement('label');
-    label.textContent = 'Transform';
-    section.appendChild(label);
-
     // Target row
     const targetRow = document.createElement('div');
     targetRow.className = 'transform-target-row';
 
     const targetLabel = document.createElement('span');
     targetLabel.className = 'transform-label';
-    targetLabel.textContent = 'Target:';
+    targetLabel.textContent = 'Transform';
     targetRow.appendChild(targetLabel);
 
     this.targetSelect = document.createElement('select');
@@ -140,7 +135,12 @@ export class TransformControls {
     this.quantizeBtn.appendChild(quantizeText);
     actionRow.appendChild(this.quantizeBtn);
 
-    // Randomize with dropdown
+    section.appendChild(actionRow);
+
+    // Randomize row
+    const randomizeRow = document.createElement('div');
+    randomizeRow.className = 'transform-btn-row';
+
     const randomizeGroup = document.createElement('div');
     randomizeGroup.className = 'transform-randomize-group';
 
@@ -168,9 +168,9 @@ export class TransformControls {
 
     randomizeGroup.appendChild(this.randomizeSelect);
     randomizeGroup.appendChild(this.randomizeBtn);
-    actionRow.appendChild(randomizeGroup);
+    randomizeRow.appendChild(randomizeGroup);
 
-    section.appendChild(actionRow);
+    section.appendChild(randomizeRow);
 
     // Clear row
     const clearRow = document.createElement('div');
