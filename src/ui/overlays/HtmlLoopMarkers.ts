@@ -52,6 +52,9 @@ export class HtmlLoopMarkers {
     document.addEventListener('pointerup', this.onPointerUp);
     document.addEventListener('pointercancel', this.onPointerUp);
 
+    // Clear drag state if clicking elsewhere (fallback for missed pointerup)
+    document.addEventListener('pointerdown', this.onDocumentPointerDown);
+
     // Clear drag state if window loses focus
     window.addEventListener('blur', this.clearDragState);
   }
@@ -138,6 +141,14 @@ export class HtmlLoopMarkers {
     this.dragging = null;
   };
 
+  private onDocumentPointerDown = (e: PointerEvent): void => {
+    // If clicking outside loop markers, clear any stuck highlight
+    const target = e.target as HTMLElement;
+    if (!target.closest('.loop-marker')) {
+      this.clearDragState();
+    }
+  };
+
   /**
    * Update marker positions from camera state
    */
@@ -177,6 +188,7 @@ export class HtmlLoopMarkers {
     document.removeEventListener('pointermove', this.onPointerMove);
     document.removeEventListener('pointerup', this.onPointerUp);
     document.removeEventListener('pointercancel', this.onPointerUp);
+    document.removeEventListener('pointerdown', this.onDocumentPointerDown);
     window.removeEventListener('blur', this.clearDragState);
 
     this.markersContainer.remove();
