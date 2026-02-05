@@ -110,8 +110,9 @@ export class Sequence {
 
   /**
    * Add a note at a specific step and pitch (without toggle)
+   * @param originalPitch The original pitch where user clicked (for scale transformations)
    */
-  addNote(step: number, pitch: number, velocity: number = DEFAULT_NOTE_VELOCITY, duration: number = DEFAULT_NOTE_DURATION): void {
+  addNote(step: number, pitch: number, velocity: number = DEFAULT_NOTE_VELOCITY, duration: number = DEFAULT_NOTE_DURATION, originalPitch?: number): void {
     const notesAtStep = this.notes.get(step) || [];
 
     // Check if note already exists
@@ -124,7 +125,7 @@ export class Sequence {
       pitch,
       velocity,
       duration,
-      originalPitch: pitch,
+      originalPitch: originalPitch ?? pitch,
     };
     notesAtStep.push(newNote);
     this.notes.set(step, notesAtStep);

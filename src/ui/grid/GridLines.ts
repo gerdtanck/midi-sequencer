@@ -9,11 +9,11 @@ const BLACK_KEY_SEMITONES = [1, 3, 6, 8, 10];
 const WHITE_KEY_COLOR = 0x1a1a2e; // Slightly lighter than background
 const BLACK_KEY_COLOR = 0x12121f; // Darker for black keys
 
-// Scale highlight colors (in-scale rows get a subtle tint)
-const WHITE_KEY_IN_SCALE_COLOR = 0x1e1e38; // Slightly brighter/warmer
-const BLACK_KEY_IN_SCALE_COLOR = 0x161628; // Slightly brighter
-const WHITE_KEY_OUT_SCALE_COLOR = 0x141420; // Dimmed
-const BLACK_KEY_OUT_SCALE_COLOR = 0x0e0e18; // More dimmed
+// Scale highlight colors - out-of-scale rows get a blueish tint
+const WHITE_KEY_IN_SCALE_COLOR = 0x1a1a2e; // Normal white key
+const BLACK_KEY_IN_SCALE_COLOR = 0x12121f; // Normal black key
+const WHITE_KEY_OUT_SCALE_COLOR = 0x1a1a3a; // Blueish tint for white keys
+const BLACK_KEY_OUT_SCALE_COLOR = 0x14142a; // Blueish tint for black keys
 
 /**
  * GridLines - Handles rendering of grid lines for the note grid

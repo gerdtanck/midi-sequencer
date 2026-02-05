@@ -1,25 +1,30 @@
 import type { Command } from './Command';
 import type { Sequence } from '../Sequence';
 import type { SelectionManager } from '../SelectionManager';
+import type { ScaleManager } from '../ScaleManager';
 
 /**
  * Command to move one or more notes by a delta
+ * When snap-to-scale is enabled, notes are snapped after moving
  */
 export class MoveNotesCommand implements Command {
   readonly description: string;
 
   private sequence: Sequence;
   private selectionManager: SelectionManager | null;
+  private scaleManager: ScaleManager | null;
   private notes: Array<{ step: number; pitch: number }>;
   private deltaStep: number;
   private deltaPitch: number;
 
-  // Store the actual moved result for accurate undo
+  // Store complete state for accurate undo
   private movedNotes: Array<{
     oldStep: number;
     oldPitch: number;
+    oldOriginalPitch: number;
     newStep: number;
     newPitch: number;
+    newOriginalPitch: number;
   }> = [];
 
   constructor(
@@ -27,10 +32,12 @@ export class MoveNotesCommand implements Command {
     selectionManager: SelectionManager | null,
     notes: Array<{ step: number; pitch: number }>,
     deltaStep: number,
-    deltaPitch: number
+    deltaPitch: number,
+    scaleManager?: ScaleManager | null
   ) {
     this.sequence = sequence;
     this.selectionManager = selectionManager;
+    this.scaleManager = scaleManager ?? null;
     this.notes = [...notes];
     this.deltaStep = deltaStep;
     this.deltaPitch = deltaPitch;
@@ -40,30 +47,82 @@ export class MoveNotesCommand implements Command {
   }
 
   execute(): void {
-    // Move notes and capture the result
-    this.movedNotes = this.sequence.moveNotes(this.notes, this.deltaStep, this.deltaPitch);
+    this.movedNotes = [];
 
-    // Update selection to track moved notes
-    if (this.selectionManager) {
-      for (const { oldStep, oldPitch, newStep, newPitch } of this.movedNotes) {
-        this.selectionManager.moveNote(oldStep, oldPitch, newStep, newPitch);
+    for (const { step, pitch } of this.notes) {
+      const note = this.sequence.getNoteAt(step, pitch);
+      if (!note) continue;
+
+      const oldOriginalPitch = note.originalPitch ?? pitch;
+
+      // Update original pitch by delta (user's new intention)
+      const newOriginalPitch = oldOriginalPitch + this.deltaPitch;
+
+      // Calculate actual pitch (snapped if enabled)
+      let newPitch: number;
+      if (this.scaleManager?.snapEnabled && !this.scaleManager.isChromatic()) {
+        newPitch = this.scaleManager.snapToScale(newOriginalPitch);
+      } else {
+        newPitch = newOriginalPitch;
+      }
+
+      const newStep = step + this.deltaStep;
+
+      // Store state for undo
+      this.movedNotes.push({
+        oldStep: step,
+        oldPitch: pitch,
+        oldOriginalPitch,
+        newStep,
+        newPitch,
+        newOriginalPitch,
+      });
+    }
+
+    // Perform the actual moves
+    for (const moved of this.movedNotes) {
+      // Remove from old position
+      const note = this.sequence.getNoteAt(moved.oldStep, moved.oldPitch);
+      if (!note) continue;
+
+      this.sequence.removeNote(moved.oldStep, moved.oldPitch);
+
+      // Add at new position with updated originalPitch
+      this.sequence.addNote(
+        moved.newStep,
+        moved.newPitch,
+        note.velocity,
+        note.duration,
+        moved.newOriginalPitch
+      );
+
+      // Update selection
+      if (this.selectionManager) {
+        this.selectionManager.moveNote(moved.oldStep, moved.oldPitch, moved.newStep, moved.newPitch);
       }
     }
   }
 
   undo(): void {
-    // Move notes back (reverse the deltas)
-    const notesToMoveBack = this.movedNotes.map(({ newStep, newPitch }) => ({
-      step: newStep,
-      pitch: newPitch,
-    }));
+    // Restore notes to their original positions
+    for (const moved of this.movedNotes) {
+      const note = this.sequence.getNoteAt(moved.newStep, moved.newPitch);
+      if (!note) continue;
 
-    const movedBack = this.sequence.moveNotes(notesToMoveBack, -this.deltaStep, -this.deltaPitch);
+      this.sequence.removeNote(moved.newStep, moved.newPitch);
 
-    // Update selection to track moved notes back
-    if (this.selectionManager) {
-      for (const { oldStep, oldPitch, newStep, newPitch } of movedBack) {
-        this.selectionManager.moveNote(oldStep, oldPitch, newStep, newPitch);
+      // Restore at old position with old originalPitch
+      this.sequence.addNote(
+        moved.oldStep,
+        moved.oldPitch,
+        note.velocity,
+        note.duration,
+        moved.oldOriginalPitch
+      );
+
+      // Update selection back
+      if (this.selectionManager) {
+        this.selectionManager.moveNote(moved.newStep, moved.newPitch, moved.oldStep, moved.oldPitch);
       }
     }
   }

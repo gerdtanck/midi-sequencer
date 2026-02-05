@@ -13,24 +13,27 @@ export class AddNoteCommand implements Command {
   private pitch: number;
   private velocity: number;
   private duration: number;
+  private originalPitch: number;
 
   constructor(
     sequence: Sequence,
     step: number,
     pitch: number,
     velocity: number,
-    duration: number
+    duration: number,
+    originalPitch?: number
   ) {
     this.sequence = sequence;
     this.step = step;
     this.pitch = pitch;
     this.velocity = velocity;
     this.duration = duration;
+    this.originalPitch = originalPitch ?? pitch; // Default to pitch if not specified
     this.description = `Add note at step ${step}`;
   }
 
   execute(): void {
-    this.sequence.addNote(this.step, this.pitch, this.velocity, this.duration);
+    this.sequence.addNote(this.step, this.pitch, this.velocity, this.duration, this.originalPitch);
   }
 
   undo(): void {

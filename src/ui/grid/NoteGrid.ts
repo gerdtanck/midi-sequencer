@@ -207,30 +207,37 @@ export class NoteGrid {
   private onNoteToggle(cell: GridCell): void {
     if (!this.sequence) return;
 
-    const existingNote = this.sequence.getNoteAt(cell.step, cell.pitch);
+    // Apply snap-to-scale if enabled
+    let targetPitch = cell.pitch;
+    if (this.scaleManager?.snapEnabled) {
+      targetPitch = this.scaleManager.snapToScale(cell.pitch);
+    }
+
+    const existingNote = this.sequence.getNoteAt(cell.step, targetPitch);
 
     if (existingNote) {
       // Remove existing note
-      const command = new RemoveNoteCommand(this.sequence, cell.step, cell.pitch, existingNote);
+      const command = new RemoveNoteCommand(this.sequence, cell.step, targetPitch, existingNote);
       this.commandHistory.execute(command);
 
       // Also remove from selection
       if (this.selectionManager) {
-        this.selectionManager.deselect(cell.step, cell.pitch);
+        this.selectionManager.deselect(cell.step, targetPitch);
       }
     } else {
-      // Add new note
+      // Add new note - store original pitch for scale transformations
       const command = new AddNoteCommand(
         this.sequence,
         cell.step,
-        cell.pitch,
+        targetPitch,
         DEFAULT_NOTE_VELOCITY,
-        DEFAULT_NOTE_DURATION
+        DEFAULT_NOTE_DURATION,
+        cell.pitch  // originalPitch - where user actually clicked
       );
       this.commandHistory.execute(command);
 
       // Audition the new note
-      this.onNoteAudition?.([cell.pitch]);
+      this.onNoteAudition?.([targetPitch]);
     }
 
     this.forceRender();
@@ -279,7 +286,8 @@ export class NoteGrid {
       this.selectionManager,
       notes,
       deltaStep,
-      deltaPitch
+      deltaPitch,
+      this.scaleManager
     );
     this.commandHistory.execute(command);
     this.forceRender();
@@ -370,10 +378,54 @@ export class NoteGrid {
     // Wire scale manager to grid lines for row highlighting
     this.gridLines.setScaleManager(scaleManager);
 
-    // Trigger re-render when scale changes
+    // When scale changes, recompute note positions from their original pitches
     scaleManager.onChange(() => {
+      this.applyScaleToNotes();
       this.forceRender();
     });
+  }
+
+  /**
+   * Apply current scale to all notes based on their original pitches
+   * Called when scale or snap setting changes
+   */
+  private applyScaleToNotes(): void {
+    if (!this.sequence || !this.scaleManager) return;
+
+    const allNotes = this.sequence.getAllNotes();
+
+    for (const { step, notes } of allNotes) {
+      for (const note of notes) {
+        const originalPitch = note.originalPitch ?? note.pitch;
+        let targetPitch: number;
+
+        if (this.scaleManager.snapEnabled && !this.scaleManager.isChromatic()) {
+          // Snap to scale from original pitch
+          targetPitch = this.scaleManager.snapToScale(originalPitch);
+        } else {
+          // Return to original pitch
+          targetPitch = originalPitch;
+        }
+
+        // Update pitch if different
+        if (targetPitch !== note.pitch) {
+          // Update selection if the note was selected
+          if (this.selectionManager?.isSelected(step, note.pitch)) {
+            this.selectionManager.deselect(step, note.pitch);
+            this.selectionManager.select(step, targetPitch);
+          }
+
+          // Move the note to its new pitch
+          this.sequence.moveNote(step, note.pitch, step, targetPitch);
+
+          // Preserve the original pitch reference
+          const movedNote = this.sequence.getNoteAt(step, targetPitch);
+          if (movedNote) {
+            movedNote.originalPitch = originalPitch;
+          }
+        }
+      }
+    }
   }
 
   /**
