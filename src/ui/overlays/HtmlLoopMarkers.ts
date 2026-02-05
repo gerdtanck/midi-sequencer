@@ -51,11 +51,6 @@ export class HtmlLoopMarkers {
     document.addEventListener('pointermove', this.onPointerMove);
     document.addEventListener('pointerup', this.onPointerUp);
     document.addEventListener('pointercancel', this.onPointerUp);
-
-    // Clear drag state if clicking elsewhere (fallback for missed pointerup)
-    document.addEventListener('pointerdown', this.onDocumentPointerDown);
-
-    // Clear drag state if window loses focus
     window.addEventListener('blur', this.clearDragState);
   }
 
@@ -81,7 +76,6 @@ export class HtmlLoopMarkers {
         ? this.sequence.getLoopMarkers().start
         : this.sequence.getLoopMarkers().end;
 
-      marker.classList.add('dragging');
       marker.setPointerCapture(e.pointerId);
     });
 
@@ -135,18 +129,7 @@ export class HtmlLoopMarkers {
   };
 
   private clearDragState = (): void => {
-    // Always clear both markers to ensure no stuck states
-    this.startMarker.classList.remove('dragging');
-    this.endMarker.classList.remove('dragging');
     this.dragging = null;
-  };
-
-  private onDocumentPointerDown = (e: PointerEvent): void => {
-    // If clicking outside loop markers, clear any stuck highlight
-    const target = e.target as HTMLElement;
-    if (!target.closest('.loop-marker')) {
-      this.clearDragState();
-    }
   };
 
   /**
@@ -188,7 +171,6 @@ export class HtmlLoopMarkers {
     document.removeEventListener('pointermove', this.onPointerMove);
     document.removeEventListener('pointerup', this.onPointerUp);
     document.removeEventListener('pointercancel', this.onPointerUp);
-    document.removeEventListener('pointerdown', this.onDocumentPointerDown);
     window.removeEventListener('blur', this.clearDragState);
 
     this.markersContainer.remove();
