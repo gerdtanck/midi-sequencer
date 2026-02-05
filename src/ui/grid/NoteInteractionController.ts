@@ -741,7 +741,9 @@ export class NoteInteractionController {
     const deltaWorldX = world.x - this.ctrlEditStartX;
 
     // Vertical drag = velocity change (up = increase, so negate)
-    const deltaVelocity = Math.round(-deltaPixelsY / PIXELS_PER_VELOCITY);
+    // Mobile uses higher sensitivity (half the pixels per velocity unit)
+    const pixelsPerVel = this.isMobile ? PIXELS_PER_VELOCITY / 2 : PIXELS_PER_VELOCITY;
+    const deltaVelocity = Math.round(-deltaPixelsY / pixelsPerVel);
 
     // Horizontal drag = length change
     const deltaDuration = deltaWorldX;
@@ -822,7 +824,9 @@ export class NoteInteractionController {
     // Calculate final deltas
     const deltaPixelsY = pos.y - this.ctrlEditStartY;
     const deltaWorldX = world.x - this.ctrlEditStartX;
-    const deltaVelocity = Math.round(-deltaPixelsY / PIXELS_PER_VELOCITY);
+    // Mobile uses higher sensitivity (half the pixels per velocity unit)
+    const pixelsPerVel = this.isMobile ? PIXELS_PER_VELOCITY / 2 : PIXELS_PER_VELOCITY;
+    const deltaVelocity = Math.round(-deltaPixelsY / pixelsPerVel);
     const deltaDuration = deltaWorldX;
 
     // Only commit changes if there was actual movement
