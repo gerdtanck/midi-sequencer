@@ -1,9 +1,10 @@
 import './ui/styles.css';
 import { NoteGrid } from './ui/grid';
 import { Sequence, PlaybackEngine } from './core';
+import { ScaleManager } from './core/ScaleManager';
 import { MidiManager } from './midi';
 import { LookaheadScheduler } from './scheduler';
-import { TransportControls } from './ui/controls';
+import { TransportControls, ScaleSelector } from './ui/controls';
 import { KeyboardShortcuts } from './ui/KeyboardShortcuts';
 import { BASE_MIDI } from './config/GridConfig';
 
@@ -12,10 +13,12 @@ import { BASE_MIDI } from './config/GridConfig';
  */
 let noteGrid: NoteGrid | null = null;
 let sequence: Sequence | null = null;
+let scaleManager: ScaleManager | null = null;
 let midiManager: MidiManager | null = null;
 let scheduler: LookaheadScheduler | null = null;
 let playbackEngine: PlaybackEngine | null = null;
 let transportControls: TransportControls | null = null;
+let scaleSelector: ScaleSelector | null = null;
 let keyboardShortcuts: KeyboardShortcuts | null = null;
 
 /**
@@ -29,6 +32,7 @@ function initApp(): void {
   const pianoKeysContainer = document.getElementById('piano-keys-container');
   const barIndicatorsContainer = document.getElementById('bar-indicators-container');
   const transportContainer = document.getElementById('transport-controls');
+  const scaleSelectorContainer = document.getElementById('scale-selector');
   const barInput = document.getElementById('bar-count') as HTMLInputElement | null;
   const octaveInput = document.getElementById('octave-count') as HTMLInputElement | null;
 
@@ -39,6 +43,7 @@ function initApp(): void {
 
   // Create core components
   sequence = new Sequence();
+  scaleManager = new ScaleManager();
   midiManager = new MidiManager();
   scheduler = new LookaheadScheduler();
   playbackEngine = new PlaybackEngine(sequence, midiManager, scheduler);
@@ -48,6 +53,9 @@ function initApp(): void {
 
   // Initialize note interaction (click to add/remove notes)
   noteGrid.initNoteInteraction(sequence);
+
+  // Wire scale manager to grid (for scale highlighting)
+  noteGrid.setScaleManager(scaleManager);
 
   // Initialize overlays if containers exist
   if (pianoKeysContainer) {
@@ -113,6 +121,12 @@ function initApp(): void {
     transportControls.render();
   }
 
+  // Initialize scale selector
+  if (scaleSelectorContainer && scaleManager) {
+    scaleSelector = new ScaleSelector(scaleSelectorContainer, scaleManager);
+    scaleSelector.render();
+  }
+
   // Initialize keyboard shortcuts
   keyboardShortcuts = new KeyboardShortcuts(playbackEngine, midiManager);
   keyboardShortcuts.setPlaybackStateCallback((isPlaying: boolean) => {
@@ -132,6 +146,7 @@ function initApp(): void {
   Object.assign(window, {
     noteGrid,
     sequence,
+    scaleManager,
     midiManager,
     scheduler,
     playbackEngine,

@@ -10,6 +10,7 @@ import { PianoKeys } from '../overlays/PianoKeys';
 import { BarIndicators } from '../overlays/BarIndicators';
 import { Sequence } from '@/core/Sequence';
 import { SelectionManager } from '@/core/SelectionManager';
+import { ScaleManager } from '@/core/ScaleManager';
 import { InputManager } from '../input';
 import {
   CommandHistory,
@@ -55,6 +56,9 @@ export class NoteGrid {
 
   // Selection manager
   private selectionManager: SelectionManager | null = null;
+
+  // Scale manager
+  private scaleManager: ScaleManager | null = null;
 
   // Command history for undo/redo
   private commandHistory: CommandHistory = new CommandHistory();
@@ -355,6 +359,28 @@ export class NoteGrid {
   initBarIndicators(container: HTMLElement): void {
     this.barIndicators = new BarIndicators(container, this.config, this.barCount);
     this.syncOverlayComponents();
+  }
+
+  /**
+   * Set the scale manager for scale-aware features
+   */
+  setScaleManager(scaleManager: ScaleManager): void {
+    this.scaleManager = scaleManager;
+
+    // Wire scale manager to grid lines for row highlighting
+    this.gridLines.setScaleManager(scaleManager);
+
+    // Trigger re-render when scale changes
+    scaleManager.onChange(() => {
+      this.forceRender();
+    });
+  }
+
+  /**
+   * Get the scale manager
+   */
+  getScaleManager(): ScaleManager | null {
+    return this.scaleManager;
   }
 
   private createScene(): THREE.Scene {

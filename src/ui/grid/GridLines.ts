@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { GridConfig, GridLineStyles, LineStyle, loadLineStyles, LINE_WIDTH_SCALE } from '@/config/GridConfig';
+import { GridConfig, GridLineStyles, LineStyle, loadLineStyles, LINE_WIDTH_SCALE, BASE_MIDI } from '@/config/GridConfig';
+import type { ScaleManager } from '@/core/ScaleManager';
 
 // Black key semitone positions within each octave (C#, D#, F#, G#, A#)
 const BLACK_KEY_SEMITONES = [1, 3, 6, 8, 10];
@@ -7,6 +8,12 @@ const BLACK_KEY_SEMITONES = [1, 3, 6, 8, 10];
 // Row background colors
 const WHITE_KEY_COLOR = 0x1a1a2e; // Slightly lighter than background
 const BLACK_KEY_COLOR = 0x12121f; // Darker for black keys
+
+// Scale highlight colors (in-scale rows get a subtle tint)
+const WHITE_KEY_IN_SCALE_COLOR = 0x1e1e38; // Slightly brighter/warmer
+const BLACK_KEY_IN_SCALE_COLOR = 0x161628; // Slightly brighter
+const WHITE_KEY_OUT_SCALE_COLOR = 0x141420; // Dimmed
+const BLACK_KEY_OUT_SCALE_COLOR = 0x0e0e18; // More dimmed
 
 /**
  * GridLines - Handles rendering of grid lines for the note grid
@@ -23,6 +30,19 @@ export class GridLines {
   private meshes: THREE.Mesh[] = [];
   private styles: GridLineStyles;
 
+  // Scale manager reference for scale highlighting
+  private scaleManager: ScaleManager | null = null;
+
+  // Separate tracking for row background meshes (for scale updates)
+  private rowBackgroundMeshes: THREE.Mesh[] = [];
+
+  // Current dimensions (needed for scale updates)
+  private currentBarCount = 0;
+  private currentOctaveCount = 0;
+
+  // Bound listener for cleanup
+  private boundOnScaleChange: (() => void) | null = null;
+
   constructor(scene: THREE.Scene, config: GridConfig) {
     this.scene = scene;
     this.config = config;
@@ -37,10 +57,35 @@ export class GridLines {
   }
 
   /**
+   * Set the scale manager for scale-aware row highlighting
+   */
+  setScaleManager(scaleManager: ScaleManager): void {
+    // Remove old listener
+    if (this.scaleManager && this.boundOnScaleChange) {
+      this.scaleManager.offChange(this.boundOnScaleChange);
+    }
+
+    this.scaleManager = scaleManager;
+
+    // Listen for scale changes
+    this.boundOnScaleChange = () => this.updateRowBackgrounds();
+    this.scaleManager.onChange(this.boundOnScaleChange);
+
+    // Update immediately if grid exists
+    if (this.currentBarCount > 0 && this.currentOctaveCount > 0) {
+      this.updateRowBackgrounds();
+    }
+  }
+
+  /**
    * Creates all grid lines based on current bar and octave count
    */
   createGridLines(barCount: number, octaveCount: number): void {
     this.clearLines();
+
+    // Store dimensions for scale updates
+    this.currentBarCount = barCount;
+    this.currentOctaveCount = octaveCount;
 
     const totalSteps = barCount * this.config.stepsPerBar;
     const totalSemitones = octaveCount * this.config.semitonesPerOctave;
@@ -101,23 +146,83 @@ export class GridLines {
 
   /**
    * Creates row background quads to distinguish white/black piano keys
+   * Also applies scale highlighting when a scale manager is set
    */
   private createRowBackgrounds(totalSteps: number, totalSemitones: number): void {
-    const whiteKeyRows: number[] = [];
-    const blackKeyRows: number[] = [];
+    // Clear existing row background meshes
+    this.clearRowBackgrounds();
+
+    // Group rows by type and scale membership
+    const whiteKeyInScale: number[] = [];
+    const whiteKeyOutScale: number[] = [];
+    const blackKeyInScale: number[] = [];
+    const blackKeyOutScale: number[] = [];
 
     for (let semitone = 0; semitone < totalSemitones; semitone++) {
       const semitoneInOctave = semitone % this.config.semitonesPerOctave;
-      if (BLACK_KEY_SEMITONES.includes(semitoneInOctave)) {
-        blackKeyRows.push(semitone);
+      const isBlackKey = BLACK_KEY_SEMITONES.includes(semitoneInOctave);
+
+      // Convert grid row to MIDI pitch for scale checking
+      const midiPitch = BASE_MIDI + semitone;
+      const inScale = this.scaleManager?.isInScale(midiPitch) ?? true; // Default to in-scale if no manager
+
+      if (isBlackKey) {
+        if (inScale) {
+          blackKeyInScale.push(semitone);
+        } else {
+          blackKeyOutScale.push(semitone);
+        }
       } else {
-        whiteKeyRows.push(semitone);
+        if (inScale) {
+          whiteKeyInScale.push(semitone);
+        } else {
+          whiteKeyOutScale.push(semitone);
+        }
       }
     }
 
     // Create background quads behind everything (z = -0.1)
-    this.createRowQuads(whiteKeyRows, totalSteps, WHITE_KEY_COLOR, -0.1);
-    this.createRowQuads(blackKeyRows, totalSteps, BLACK_KEY_COLOR, -0.1);
+    // Use scale-aware colors when scale manager is set, otherwise default colors
+    if (this.scaleManager && !this.scaleManager.isChromatic()) {
+      this.createRowQuads(whiteKeyInScale, totalSteps, WHITE_KEY_IN_SCALE_COLOR, -0.1, true);
+      this.createRowQuads(whiteKeyOutScale, totalSteps, WHITE_KEY_OUT_SCALE_COLOR, -0.1, true);
+      this.createRowQuads(blackKeyInScale, totalSteps, BLACK_KEY_IN_SCALE_COLOR, -0.1, true);
+      this.createRowQuads(blackKeyOutScale, totalSteps, BLACK_KEY_OUT_SCALE_COLOR, -0.1, true);
+    } else {
+      // No scale or chromatic - use default colors
+      this.createRowQuads([...whiteKeyInScale, ...whiteKeyOutScale], totalSteps, WHITE_KEY_COLOR, -0.1, true);
+      this.createRowQuads([...blackKeyInScale, ...blackKeyOutScale], totalSteps, BLACK_KEY_COLOR, -0.1, true);
+    }
+  }
+
+  /**
+   * Updates row backgrounds when scale changes (without rebuilding entire grid)
+   */
+  private updateRowBackgrounds(): void {
+    if (this.currentBarCount === 0 || this.currentOctaveCount === 0) return;
+
+    const totalSteps = this.currentBarCount * this.config.stepsPerBar;
+    const totalSemitones = this.currentOctaveCount * this.config.semitonesPerOctave;
+
+    this.createRowBackgrounds(totalSteps, totalSemitones);
+  }
+
+  /**
+   * Clears row background meshes only (for scale updates)
+   */
+  private clearRowBackgrounds(): void {
+    for (const mesh of this.rowBackgroundMeshes) {
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+      this.gridGroup.remove(mesh);
+
+      // Also remove from main meshes array
+      const index = this.meshes.indexOf(mesh);
+      if (index !== -1) {
+        this.meshes.splice(index, 1);
+      }
+    }
+    this.rowBackgroundMeshes = [];
   }
 
   /**
@@ -127,7 +232,8 @@ export class GridLines {
     rows: number[],
     width: number,
     color: number,
-    zPosition: number
+    zPosition: number,
+    isRowBackground: boolean = false
   ): void {
     if (rows.length === 0) return;
 
@@ -179,6 +285,11 @@ export class GridLines {
     const mesh = new THREE.Mesh(geometry, material);
     this.gridGroup.add(mesh);
     this.meshes.push(mesh);
+
+    // Track row backgrounds separately for efficient scale updates
+    if (isRowBackground) {
+      this.rowBackgroundMeshes.push(mesh);
+    }
   }
 
   /**
@@ -275,6 +386,7 @@ export class GridLines {
       this.gridGroup.remove(mesh);
     }
     this.meshes = [];
+    this.rowBackgroundMeshes = [];
   }
 
   /**
@@ -288,6 +400,11 @@ export class GridLines {
    * Disposes of all resources
    */
   dispose(): void {
+    // Remove scale manager listener
+    if (this.scaleManager && this.boundOnScaleChange) {
+      this.scaleManager.offChange(this.boundOnScaleChange);
+    }
+
     this.clearLines();
     this.scene.remove(this.gridGroup);
   }

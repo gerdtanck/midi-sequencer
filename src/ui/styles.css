@@ -522,6 +522,62 @@ body {
   }
 }
 
+/* Scale Selector Styles */
+.scale-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.root-select,
+.scale-select {
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  background-color: var(--grid-background);
+  border: 1px solid var(--control-border);
+  border-radius: 4px;
+  color: var(--control-text);
+  cursor: pointer;
+  outline: none;
+}
+
+.root-select {
+  width: 60px;
+}
+
+.scale-select {
+  flex: 1;
+}
+
+.root-select:focus,
+.scale-select:focus {
+  border-color: var(--control-accent);
+}
+
+.root-select option,
+.scale-select option {
+  background-color: var(--grid-background);
+  color: var(--control-text);
+}
+
+.snap-row {
+  margin-top: 4px;
+}
+
+.snap-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.snap-toggle {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--control-accent);
+}
+
 /* Landscape phone optimization */
 @media (max-height: 500px) and (orientation: landscape) {
   #app {
