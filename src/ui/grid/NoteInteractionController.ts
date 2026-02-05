@@ -13,6 +13,7 @@ import {
   SELECTION_RECT_COLOR,
   SELECTION_RECT_OPACITY,
   SELECTION_RECT_Z_POSITION,
+  BASE_MIDI,
 } from '@/config/GridConfig';
 import type { NoteRenderer } from './NoteRenderer';
 import type { SelectionManager } from '@/core/SelectionManager';
@@ -358,7 +359,7 @@ export class NoteInteractionController {
         if (this.selectionManager?.isSelected(noteAtPos.step, noteAtPos.pitch)) {
           const selectedNotes = this.selectionManager.getSelectedNotes();
           this.ctrlEditNotes = selectedNotes.map(n => {
-            const noteData = this.noteRenderer?.getNoteAtWorld(n.step + 0.5, n.pitch - 36 + 0.5, 0);
+            const noteData = this.noteRenderer?.getNoteAtWorld(n.step + 0.5, n.pitch - BASE_MIDI + 0.5, 0);
             return {
               step: n.step,
               pitch: n.pitch,
@@ -489,7 +490,7 @@ export class NoteInteractionController {
     if (this.selectionManager?.isSelected(noteAtPos.step, noteAtPos.pitch)) {
       const selectedNotes = this.selectionManager.getSelectedNotes();
       this.ctrlEditNotes = selectedNotes.map(n => {
-        const noteData = this.noteRenderer?.getNoteAtWorld(n.step + 0.5, n.pitch - 36 + 0.5, 0);
+        const noteData = this.noteRenderer?.getNoteAtWorld(n.step + 0.5, n.pitch - BASE_MIDI + 0.5, 0);
         return {
           step: n.step,
           pitch: n.pitch,

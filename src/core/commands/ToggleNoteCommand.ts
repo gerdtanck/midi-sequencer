@@ -52,6 +52,7 @@ export class RemoveNoteCommand implements Command {
   private pitch: number;
   private velocity: number;
   private duration: number;
+  private originalPitch: number;
 
   constructor(sequence: Sequence, step: number, pitch: number, note: Note) {
     this.sequence = sequence;
@@ -59,6 +60,7 @@ export class RemoveNoteCommand implements Command {
     this.pitch = pitch;
     this.velocity = note.velocity;
     this.duration = note.duration;
+    this.originalPitch = note.originalPitch ?? pitch;
     this.description = `Remove note at step ${step}`;
   }
 
@@ -67,6 +69,6 @@ export class RemoveNoteCommand implements Command {
   }
 
   undo(): void {
-    this.sequence.addNote(this.step, this.pitch, this.velocity, this.duration);
+    this.sequence.addNote(this.step, this.pitch, this.velocity, this.duration, this.originalPitch);
   }
 }
