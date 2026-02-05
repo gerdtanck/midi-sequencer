@@ -22,6 +22,8 @@ export class MoveNotesCommand implements Command {
     oldStep: number;
     oldPitch: number;
     oldOriginalPitch: number;
+    oldVelocity: number;
+    oldDuration: number;
     newStep: number;
     newPitch: number;
     newOriginalPitch: number;
@@ -49,6 +51,7 @@ export class MoveNotesCommand implements Command {
   execute(): void {
     this.movedNotes = [];
 
+    // First pass: collect all note data upfront before any modifications
     for (const { step, pitch } of this.notes) {
       const note = this.sequence.getNoteAt(step, pitch);
       if (!note) continue;
@@ -68,31 +71,29 @@ export class MoveNotesCommand implements Command {
 
       const newStep = step + this.deltaStep;
 
-      // Store state for undo
+      // Store complete state including velocity and duration
       this.movedNotes.push({
         oldStep: step,
         oldPitch: pitch,
         oldOriginalPitch,
+        oldVelocity: note.velocity,
+        oldDuration: note.duration,
         newStep,
         newPitch,
         newOriginalPitch,
       });
     }
 
-    // Perform the actual moves
+    // Second pass: perform the actual moves using stored data
     for (const moved of this.movedNotes) {
-      // Remove from old position
-      const note = this.sequence.getNoteAt(moved.oldStep, moved.oldPitch);
-      if (!note) continue;
-
       this.sequence.removeNote(moved.oldStep, moved.oldPitch);
 
-      // Add at new position with updated originalPitch
+      // Add at new position with all preserved properties
       this.sequence.addNote(
         moved.newStep,
         moved.newPitch,
-        note.velocity,
-        note.duration,
+        moved.oldVelocity,
+        moved.oldDuration,
         moved.newOriginalPitch
       );
 
@@ -104,19 +105,16 @@ export class MoveNotesCommand implements Command {
   }
 
   undo(): void {
-    // Restore notes to their original positions
+    // Restore notes to their original positions using stored data
     for (const moved of this.movedNotes) {
-      const note = this.sequence.getNoteAt(moved.newStep, moved.newPitch);
-      if (!note) continue;
-
       this.sequence.removeNote(moved.newStep, moved.newPitch);
 
-      // Restore at old position with old originalPitch
+      // Restore at old position with all original properties
       this.sequence.addNote(
         moved.oldStep,
         moved.oldPitch,
-        note.velocity,
-        note.duration,
+        moved.oldVelocity,
+        moved.oldDuration,
         moved.oldOriginalPitch
       );
 
