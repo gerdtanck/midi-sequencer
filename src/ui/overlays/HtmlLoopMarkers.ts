@@ -50,6 +50,10 @@ export class HtmlLoopMarkers {
     // Global listeners for drag
     document.addEventListener('pointermove', this.onPointerMove);
     document.addEventListener('pointerup', this.onPointerUp);
+    document.addEventListener('pointercancel', this.onPointerUp);
+
+    // Clear drag state if window loses focus
+    window.addEventListener('blur', this.clearDragState);
   }
 
   private createMarker(type: 'start' | 'end'): HTMLElement {
@@ -119,7 +123,19 @@ export class HtmlLoopMarkers {
     if (this.dragging) {
       const marker = this.dragging === 'start' ? this.startMarker : this.endMarker;
       marker.classList.remove('dragging');
-      marker.releasePointerCapture(e.pointerId);
+      try {
+        marker.releasePointerCapture(e.pointerId);
+      } catch {
+        // Pointer capture may already be released
+      }
+      this.dragging = null;
+    }
+  };
+
+  private clearDragState = (): void => {
+    if (this.dragging) {
+      const marker = this.dragging === 'start' ? this.startMarker : this.endMarker;
+      marker.classList.remove('dragging');
       this.dragging = null;
     }
   };
@@ -162,6 +178,8 @@ export class HtmlLoopMarkers {
   dispose(): void {
     document.removeEventListener('pointermove', this.onPointerMove);
     document.removeEventListener('pointerup', this.onPointerUp);
+    document.removeEventListener('pointercancel', this.onPointerUp);
+    window.removeEventListener('blur', this.clearDragState);
 
     this.markersContainer.remove();
   }

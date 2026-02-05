@@ -374,6 +374,7 @@ body {
   pointer-events: auto;
   display: flex;
   justify-content: center;
+  touch-action: none; /* Prevent browser touch handling for responsive drag */
 }
 
 .loop-marker-line {
