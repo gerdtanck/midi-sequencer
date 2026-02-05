@@ -149,6 +149,11 @@ export class NoteGrid {
     // Connect selection manager to interaction controller
     this.noteInteraction.setSelectionManager(this.selectionManager);
 
+    // Connect scale manager if already set
+    if (this.scaleManager) {
+      this.noteInteraction.setScaleManager(this.scaleManager);
+    }
+
     // Connect scene for selection rectangle rendering
     this.noteInteraction.setScene(this.scene);
 
@@ -379,6 +384,11 @@ export class NoteGrid {
 
     // Wire scale manager to grid lines for row highlighting
     this.gridLines.setScaleManager(scaleManager);
+
+    // Wire scale manager to note interaction for scale-aware drag preview
+    if (this.noteInteraction) {
+      this.noteInteraction.setScaleManager(scaleManager);
+    }
 
     // When scale changes, recompute note positions from their original pitches
     scaleManager.onChange(() => {

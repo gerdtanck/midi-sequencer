@@ -16,6 +16,7 @@ import {
 } from '@/config/GridConfig';
 import type { NoteRenderer } from './NoteRenderer';
 import type { SelectionManager } from '@/core/SelectionManager';
+import type { ScaleManager } from '@/core/ScaleManager';
 import {
   screenToWorld,
   worldToGridCell,
@@ -136,6 +137,7 @@ export class NoteInteractionController {
   // References
   private noteRenderer: NoteRenderer | null = null;
   private selectionManager: SelectionManager | null = null;
+  private scaleManager: ScaleManager | null = null;
 
   // Callbacks
   private onNoteToggle: NoteToggleCallback | null = null;
@@ -182,6 +184,10 @@ export class NoteInteractionController {
 
   setSelectionManager(manager: SelectionManager): void {
     this.selectionManager = manager;
+  }
+
+  setScaleManager(manager: ScaleManager): void {
+    this.scaleManager = manager;
   }
 
   setScene(scene: THREE.Scene): void {
@@ -694,18 +700,44 @@ export class NoteInteractionController {
 
     // Snap deltas for visual preview (notes snap during drag, not just on release)
     const snappedDeltaX = snapToSubstep(deltaX);
-    const snappedDeltaY = deltaPitch; // Pitch is already integer-snapped
 
     // Update note positions visually (doesn't change sequence data yet)
     if (this.noteRenderer) {
-      this.noteRenderer.offsetNotes(this.dragNotes, snappedDeltaX, snappedDeltaY);
+      // Check if scale-aware snapping is enabled
+      const useScaleSnap = this.scaleManager?.snapEnabled && !this.scaleManager?.isChromatic();
+
+      if (useScaleSnap && this.scaleManager) {
+        // Build target positions with scale-aware pitch snapping
+        const targets = this.dragNotes.map(note => {
+          // Calculate target pitch by snapping moved pitch to scale
+          // Note: The final MoveNotesCommand will use originalPitch for accurate calculation
+          const movedPitch = note.pitch + deltaPitch;
+          const targetPitch = this.scaleManager!.snapToScale(movedPitch);
+          return {
+            step: note.step,
+            pitch: note.pitch,
+            targetStep: note.step + snappedDeltaX,
+            targetPitch,
+          };
+        });
+        this.noteRenderer.offsetNotesToTargets(targets);
+      } else {
+        // No scale snap - use simple offset
+        this.noteRenderer.offsetNotes(this.dragNotes, snappedDeltaX, deltaPitch);
+      }
       this.onRenderRequest?.();
     }
 
     // Audition notes when pitch changes
     if (this.onNoteAudition && deltaPitch !== this.lastAuditionedDeltaPitch) {
       this.lastAuditionedDeltaPitch = deltaPitch;
-      const pitches = this.dragNotes.map(n => n.pitch + deltaPitch);
+      // For audition, also snap to scale if enabled
+      let pitches: number[];
+      if (this.scaleManager?.snapEnabled && !this.scaleManager?.isChromatic()) {
+        pitches = this.dragNotes.map(n => this.scaleManager!.snapToScale(n.pitch + deltaPitch));
+      } else {
+        pitches = this.dragNotes.map(n => n.pitch + deltaPitch);
+      }
       this.onNoteAudition(pitches);
     }
 

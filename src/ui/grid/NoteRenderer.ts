@@ -489,6 +489,41 @@ export class NoteRenderer {
   }
 
   /**
+   * Offset notes to specific target positions (for scale-aware drag preview)
+   * Each note can have a different target pitch based on scale snapping
+   */
+  offsetNotesToTargets(
+    targets: Array<{ step: number; pitch: number; targetStep: number; targetPitch: number }>
+  ): void {
+    for (const { step, pitch, targetStep, targetPitch } of targets) {
+      const key = this.getNoteKey(step, pitch);
+      const mesh = this.noteMeshes.get(key);
+      if (!mesh) continue;
+
+      const data = mesh.userData as NoteMeshData;
+      const targetSemitone = targetPitch - BASE_MIDI;
+
+      // Calculate positions
+      const noteWidth = data.duration * 0.95;
+      const originalX = data.step + noteWidth / 2 + 0.025;
+      const deltaStep = targetStep - step;
+
+      // Apply target position
+      mesh.position.x = originalX + deltaStep;
+      mesh.position.y = targetSemitone + 0.5;
+
+      // Also offset handle (PC only)
+      const handle = this.handleMeshes.get(key);
+      if (handle) {
+        const handleWidth = 0.08;
+        const originalHandleX = data.step + noteWidth + 0.025 - handleWidth / 2;
+        handle.position.x = originalHandleX + deltaStep;
+        handle.position.y = targetSemitone + 0.5;
+      }
+    }
+  }
+
+  /**
    * Reset all note positions to their original locations
    * Called after drag ends (whether committed or cancelled)
    */
