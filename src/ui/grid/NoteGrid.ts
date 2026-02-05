@@ -447,6 +447,20 @@ export class NoteGrid {
     return this.scaleManager;
   }
 
+  /**
+   * Get the sequence (for TransformControls)
+   */
+  getSequence(): Sequence | null {
+    return this.sequence;
+  }
+
+  /**
+   * Get the selection manager (for TransformControls)
+   */
+  getSelectionManager(): SelectionManager | null {
+    return this.selectionManager;
+  }
+
   private createScene(): THREE.Scene {
     const scene = new THREE.Scene();
 

@@ -4,7 +4,7 @@ import { Sequence, PlaybackEngine } from './core';
 import { ScaleManager } from './core/ScaleManager';
 import { MidiManager } from './midi';
 import { LookaheadScheduler } from './scheduler';
-import { TransportControls, ScaleSelector } from './ui/controls';
+import { TransportControls, ScaleSelector, TransformControls } from './ui/controls';
 import { KeyboardShortcuts } from './ui/KeyboardShortcuts';
 import { BASE_MIDI } from './config/GridConfig';
 
@@ -19,6 +19,7 @@ let scheduler: LookaheadScheduler | null = null;
 let playbackEngine: PlaybackEngine | null = null;
 let transportControls: TransportControls | null = null;
 let scaleSelector: ScaleSelector | null = null;
+let transformControls: TransformControls | null = null;
 let keyboardShortcuts: KeyboardShortcuts | null = null;
 
 /**
@@ -127,12 +128,22 @@ function initApp(): void {
     scaleSelector.render();
   }
 
+  // Initialize transform controls
+  const transformContainer = document.getElementById('transform-controls');
+  if (transformContainer && noteGrid) {
+    transformControls = new TransformControls(transformContainer, noteGrid);
+    transformControls.render();
+  }
+
   // Initialize keyboard shortcuts
   keyboardShortcuts = new KeyboardShortcuts(playbackEngine, midiManager);
   keyboardShortcuts.setPlaybackStateCallback((isPlaying: boolean) => {
     transportControls?.updatePlayButton(isPlaying);
   });
   keyboardShortcuts.setNoteGrid(noteGrid);
+  if (transformControls) {
+    keyboardShortcuts.setTransformControls(transformControls);
+  }
 
   // Wire playback position to grid indicator
   playbackEngine.setPositionCallback((step: number) => {
@@ -151,6 +162,7 @@ function initApp(): void {
     scheduler,
     playbackEngine,
     keyboardShortcuts,
+    transformControls,
   });
 
   console.log('MIDI Sequencer initialized');

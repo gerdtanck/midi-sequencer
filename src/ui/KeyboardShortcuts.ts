@@ -1,6 +1,7 @@
 import type { PlaybackEngine } from '@/core/PlaybackEngine';
 import type { MidiManager } from '@/midi/MidiManager';
 import type { NoteGrid } from './grid/NoteGrid';
+import type { TransformControls } from './controls/TransformControls';
 
 /**
  * KeyboardShortcuts - Handles global keyboard shortcuts for the sequencer
@@ -11,11 +12,14 @@ import type { NoteGrid } from './grid/NoteGrid';
  * - P: Panic (all notes off)
  * - Ctrl+Z: Undo
  * - Ctrl+Y / Ctrl+Shift+Z: Redo
+ * - Arrow Left/Right: Nudge selected notes
+ * - Arrow Up/Down: Transpose selected notes
  */
 export class KeyboardShortcuts {
   private playbackEngine: PlaybackEngine;
   private midiManager: MidiManager;
   private noteGrid: NoteGrid | null = null;
+  private transformControls: TransformControls | null = null;
   private boundOnKeyDown: (e: KeyboardEvent) => void;
 
   // Callback to update UI when playback state changes
@@ -34,6 +38,13 @@ export class KeyboardShortcuts {
    */
   setNoteGrid(noteGrid: NoteGrid): void {
     this.noteGrid = noteGrid;
+  }
+
+  /**
+   * Set the transform controls for nudge/transpose shortcuts
+   */
+  setTransformControls(transformControls: TransformControls): void {
+    this.transformControls = transformControls;
   }
 
   /**
@@ -94,6 +105,38 @@ export class KeyboardShortcuts {
           this.panic();
         }
         break;
+
+      case 'ArrowLeft':
+        // Nudge selected notes left
+        if (!event.ctrlKey && !event.metaKey) {
+          event.preventDefault();
+          this.nudgeSelected(-1);
+        }
+        break;
+
+      case 'ArrowRight':
+        // Nudge selected notes right
+        if (!event.ctrlKey && !event.metaKey) {
+          event.preventDefault();
+          this.nudgeSelected(1);
+        }
+        break;
+
+      case 'ArrowUp':
+        // Transpose selected notes up
+        if (!event.ctrlKey && !event.metaKey) {
+          event.preventDefault();
+          this.transposeSelected(1);
+        }
+        break;
+
+      case 'ArrowDown':
+        // Transpose selected notes down
+        if (!event.ctrlKey && !event.metaKey) {
+          event.preventDefault();
+          this.transposeSelected(-1);
+        }
+        break;
     }
   }
 
@@ -146,6 +189,30 @@ export class KeyboardShortcuts {
     if (this.noteGrid?.redo()) {
       console.log('Redo');
     }
+  }
+
+  /**
+   * Nudge selected notes left or right
+   */
+  private nudgeSelected(deltaStep: number): void {
+    if (!this.transformControls || !this.noteGrid) return;
+
+    const selectionManager = this.noteGrid.getSelectionManager();
+    if (!selectionManager?.hasSelection) return;
+
+    this.transformControls.nudge(deltaStep);
+  }
+
+  /**
+   * Transpose selected notes up or down
+   */
+  private transposeSelected(deltaPitch: number): void {
+    if (!this.transformControls || !this.noteGrid) return;
+
+    const selectionManager = this.noteGrid.getSelectionManager();
+    if (!selectionManager?.hasSelection) return;
+
+    this.transformControls.transpose(deltaPitch);
   }
 
   /**
