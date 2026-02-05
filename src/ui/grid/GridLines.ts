@@ -9,11 +9,10 @@ const BLACK_KEY_SEMITONES = [1, 3, 6, 8, 10];
 const WHITE_KEY_COLOR = 0x1a1a2e; // Slightly lighter than background
 const BLACK_KEY_COLOR = 0x12121f; // Darker for black keys
 
-// Scale highlight colors - out-of-scale rows get a blueish tint
+// Scale highlight colors - out-of-scale rows are fully black
 const WHITE_KEY_IN_SCALE_COLOR = 0x1a1a2e; // Normal white key
 const BLACK_KEY_IN_SCALE_COLOR = 0x12121f; // Normal black key
-const WHITE_KEY_OUT_SCALE_COLOR = 0x1a1a3a; // Blueish tint for white keys
-const BLACK_KEY_OUT_SCALE_COLOR = 0x14142a; // Blueish tint for black keys
+const OUT_OF_SCALE_COLOR = 0x000000; // Fully black for out-of-scale rows
 
 /**
  * GridLines - Handles rendering of grid lines for the note grid
@@ -185,9 +184,9 @@ export class GridLines {
     // Use scale-aware colors when scale manager is set, otherwise default colors
     if (this.scaleManager && !this.scaleManager.isChromatic()) {
       this.createRowQuads(whiteKeyInScale, totalSteps, WHITE_KEY_IN_SCALE_COLOR, -0.1, true);
-      this.createRowQuads(whiteKeyOutScale, totalSteps, WHITE_KEY_OUT_SCALE_COLOR, -0.1, true);
       this.createRowQuads(blackKeyInScale, totalSteps, BLACK_KEY_IN_SCALE_COLOR, -0.1, true);
-      this.createRowQuads(blackKeyOutScale, totalSteps, BLACK_KEY_OUT_SCALE_COLOR, -0.1, true);
+      // Out-of-scale rows are fully black
+      this.createRowQuads([...whiteKeyOutScale, ...blackKeyOutScale], totalSteps, OUT_OF_SCALE_COLOR, -0.1, true);
     } else {
       // No scale or chromatic - use default colors
       this.createRowQuads([...whiteKeyInScale, ...whiteKeyOutScale], totalSteps, WHITE_KEY_COLOR, -0.1, true);

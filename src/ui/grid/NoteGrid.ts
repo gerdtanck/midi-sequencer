@@ -207,37 +207,39 @@ export class NoteGrid {
   private onNoteToggle(cell: GridCell): void {
     if (!this.sequence) return;
 
-    // Apply snap-to-scale if enabled
-    let targetPitch = cell.pitch;
-    if (this.scaleManager?.snapEnabled) {
-      targetPitch = this.scaleManager.snapToScale(cell.pitch);
+    // When snap is enabled, reject input on out-of-scale rows
+    if (this.scaleManager?.snapEnabled && !this.scaleManager.isChromatic()) {
+      if (!this.scaleManager.isInScale(cell.pitch)) {
+        // Out-of-scale row - ignore input
+        return;
+      }
     }
 
-    const existingNote = this.sequence.getNoteAt(cell.step, targetPitch);
+    const existingNote = this.sequence.getNoteAt(cell.step, cell.pitch);
 
     if (existingNote) {
       // Remove existing note
-      const command = new RemoveNoteCommand(this.sequence, cell.step, targetPitch, existingNote);
+      const command = new RemoveNoteCommand(this.sequence, cell.step, cell.pitch, existingNote);
       this.commandHistory.execute(command);
 
       // Also remove from selection
       if (this.selectionManager) {
-        this.selectionManager.deselect(cell.step, targetPitch);
+        this.selectionManager.deselect(cell.step, cell.pitch);
       }
     } else {
-      // Add new note - store original pitch for scale transformations
+      // Add new note
       const command = new AddNoteCommand(
         this.sequence,
         cell.step,
-        targetPitch,
+        cell.pitch,
         DEFAULT_NOTE_VELOCITY,
         DEFAULT_NOTE_DURATION,
-        cell.pitch  // originalPitch - where user actually clicked
+        cell.pitch  // originalPitch same as pitch (user clicked on valid scale row)
       );
       this.commandHistory.execute(command);
 
       // Audition the new note
-      this.onNoteAudition?.([targetPitch]);
+      this.onNoteAudition?.([cell.pitch]);
     }
 
     this.forceRender();
