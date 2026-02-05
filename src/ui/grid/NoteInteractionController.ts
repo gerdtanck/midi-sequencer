@@ -21,6 +21,7 @@ import {
   worldToGridCell,
   getPointerPosition,
   isTouchDevice,
+  snapToSubstep,
   type GridCell,
 } from '@/utils';
 
@@ -691,9 +692,13 @@ export class NoteInteractionController {
     const deltaY = world.y - this.dragStartWorldY;
     const deltaPitch = Math.round(deltaY);
 
+    // Snap deltas for visual preview (notes snap during drag, not just on release)
+    const snappedDeltaX = snapToSubstep(deltaX);
+    const snappedDeltaY = deltaPitch; // Pitch is already integer-snapped
+
     // Update note positions visually (doesn't change sequence data yet)
     if (this.noteRenderer) {
-      this.noteRenderer.offsetNotes(this.dragNotes, deltaX, deltaY);
+      this.noteRenderer.offsetNotes(this.dragNotes, snappedDeltaX, snappedDeltaY);
       this.onRenderRequest?.();
     }
 
