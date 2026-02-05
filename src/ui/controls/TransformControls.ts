@@ -9,6 +9,8 @@ import {
   QuantizeCommand,
   ClearSequenceCommand,
   SetLengthCommand,
+  ApplyFigureCommand,
+  FIGURES,
 } from '@/core/commands/TransformCommands';
 
 /**
@@ -36,6 +38,9 @@ export class TransformControls {
   private quantizeBtn: HTMLButtonElement | null = null;
   private randomizeSelect: HTMLSelectElement | null = null;
   private randomizeBtn: HTMLButtonElement | null = null;
+  private figureSelect: HTMLSelectElement | null = null;
+  private figureAccentCheckbox: HTMLInputElement | null = null;
+  private figureApplyBtn: HTMLButtonElement | null = null;
   private lengthSelect: HTMLSelectElement | null = null;
   private clearBtn: HTMLButtonElement | null = null;
 
@@ -165,6 +170,56 @@ export class TransformControls {
 
     section.appendChild(randomizeRow);
 
+    // Figure row
+    const figureRow = document.createElement('div');
+    figureRow.className = 'transform-btn-row';
+
+    const figureGroup = document.createElement('div');
+    figureGroup.className = 'transform-figure-group';
+
+    this.figureSelect = document.createElement('select');
+    this.figureSelect.className = 'transform-figure-select';
+    this.figureSelect.title = 'Rhythmic Figure';
+
+    // Add figure options from FIGURES constant
+    const figureKeys = Object.keys(FIGURES);
+    for (const key of figureKeys) {
+      const figure = FIGURES[key];
+      const option = document.createElement('option');
+      option.value = key;
+      option.textContent = figure.name;
+      this.figureSelect.appendChild(option);
+    }
+
+    // Default to gallop
+    this.figureSelect.value = 'gallop';
+
+    // Accent checkbox
+    const accentLabel = document.createElement('label');
+    accentLabel.className = 'transform-accent-label';
+    accentLabel.title = 'Apply velocity accents';
+
+    this.figureAccentCheckbox = document.createElement('input');
+    this.figureAccentCheckbox.type = 'checkbox';
+    this.figureAccentCheckbox.checked = true;
+    this.figureAccentCheckbox.className = 'transform-accent-checkbox';
+
+    const accentText = document.createElement('span');
+    accentText.textContent = 'Accent';
+    accentLabel.appendChild(this.figureAccentCheckbox);
+    accentLabel.appendChild(accentText);
+
+    this.figureApplyBtn = this.createButton('', 'Apply figure', () => this.applyFigure());
+    this.figureApplyBtn.className = 'transform-btn';
+    this.figureApplyBtn.innerHTML = '&#x1F3B5;'; // Musical note emoji
+
+    figureGroup.appendChild(this.figureSelect);
+    figureGroup.appendChild(accentLabel);
+    figureGroup.appendChild(this.figureApplyBtn);
+    figureRow.appendChild(figureGroup);
+
+    section.appendChild(figureRow);
+
     // Length row
     const lengthRow = document.createElement('div');
     lengthRow.className = 'transform-btn-row';
@@ -286,6 +341,7 @@ export class TransformControls {
       this.reverseBtn,
       this.quantizeBtn,
       this.randomizeBtn,
+      this.figureApplyBtn,
     ];
 
     for (const btn of buttons) {
@@ -302,6 +358,11 @@ export class TransformControls {
     // Length select follows same rules
     if (this.lengthSelect) {
       this.lengthSelect.disabled = !hasNotes || !isTargetValid;
+    }
+
+    // Figure select follows same rules
+    if (this.figureSelect) {
+      this.figureSelect.disabled = !hasNotes || !isTargetValid;
     }
   }
 
@@ -416,6 +477,32 @@ export class TransformControls {
       sequence,
       selectionManager,
       this.getTarget()
+    );
+
+    this.noteGrid.getCommandHistory().execute(command);
+    this.noteGrid.forceRender();
+  }
+
+  /**
+   * Apply rhythmic figure to notes
+   */
+  private applyFigure(): void {
+    const sequence = this.noteGrid.getSequence();
+    const selectionManager = this.noteGrid.getSelectionManager();
+    if (!sequence) return;
+
+    const figureKey = this.figureSelect?.value || 'gallop';
+    const figure = FIGURES[figureKey];
+    if (!figure) return;
+
+    const applyAccents = this.figureAccentCheckbox?.checked ?? true;
+
+    const command = new ApplyFigureCommand(
+      sequence,
+      selectionManager,
+      this.getTarget(),
+      figure,
+      applyAccents
     );
 
     this.noteGrid.getCommandHistory().execute(command);
@@ -619,6 +706,54 @@ export class TransformControls {
       .transform-length-select option {
         background-color: var(--grid-background);
         color: var(--control-text);
+      }
+
+      .transform-figure-group {
+        display: flex;
+        gap: 4px;
+        flex: 1;
+        align-items: center;
+      }
+
+      .transform-figure-select {
+        flex: 1;
+        padding: 6px 8px;
+        font-size: 0.8rem;
+        background-color: var(--grid-background);
+        border: 1px solid var(--control-border);
+        border-radius: 4px;
+        color: var(--control-text);
+        cursor: pointer;
+        outline: none;
+      }
+
+      .transform-figure-select:focus {
+        border-color: var(--control-accent);
+      }
+
+      .transform-figure-select:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .transform-figure-select option {
+        background-color: var(--grid-background);
+        color: var(--control-text);
+      }
+
+      .transform-accent-label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.75rem;
+        color: var(--control-text);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .transform-accent-checkbox {
+        cursor: pointer;
+        accent-color: var(--control-accent);
       }
 
       /* Responsive adjustments */

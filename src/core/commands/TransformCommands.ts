@@ -11,9 +11,120 @@ import { snapToSubstep } from '@/utils';
 export type TransformTarget = 'all' | 'selected' | 'loop';
 
 /**
+ * Rhythmic figure definition
+ */
+export interface RhythmicFigure {
+  name: string;
+  noteCount: number; // How many notes this figure groups
+  timingPattern: number[]; // Relative timing (sums to 1.0)
+  velocityAccents?: number[]; // Velocity multipliers (optional)
+  flexible?: boolean; // Can apply to any note count
+}
+
+/**
+ * Available rhythmic figures
+ *
+ * All timing patterns use fractions of 1/6 to align with the sequencer's
+ * 6 substeps per step resolution (24 ticks per beat with 4 steps per beat).
+ * Valid substep positions: 0, 1/6, 2/6, 3/6, 4/6, 5/6 (0, 0.167, 0.333, 0.5, 0.667, 0.833)
+ */
+export const FIGURES: Record<string, RhythmicFigure> = {
+  // Basic Figures (2-3 notes)
+  straight: {
+    name: 'Straight',
+    noteCount: 2,
+    timingPattern: [3 / 6, 3 / 6], // 0.5, 0.5 - even split
+    velocityAccents: [1.0, 1.0],
+  },
+  swing: {
+    name: 'Swing',
+    noteCount: 2,
+    timingPattern: [4 / 6, 2 / 6], // 0.667, 0.333 - 2:1 swing ratio
+    velocityAccents: [1.0, 0.8],
+  },
+  scotchSnap: {
+    name: 'Scotch Snap',
+    noteCount: 2,
+    timingPattern: [1 / 6, 5 / 6], // 0.167, 0.833 - short pickup, long note
+    velocityAccents: [0.8, 1.0],
+  },
+  gallop: {
+    name: 'Gallop',
+    noteCount: 3,
+    timingPattern: [1 / 6, 2 / 6, 3 / 6], // 0.167, 0.333, 0.5 - short-short-long
+    velocityAccents: [0.8, 0.8, 1.0],
+  },
+  reverseGallop: {
+    name: 'Reverse Gallop',
+    noteCount: 3,
+    timingPattern: [3 / 6, 2 / 6, 1 / 6], // 0.5, 0.333, 0.167 - long-short-short
+    velocityAccents: [1.0, 0.8, 0.8],
+  },
+  triplet: {
+    name: 'Triplet',
+    noteCount: 3,
+    timingPattern: [2 / 6, 2 / 6, 2 / 6], // 0.333, 0.333, 0.333 - even triplet
+    velocityAccents: [1.0, 0.85, 0.85],
+  },
+  // Compound Figures (4-6 notes)
+  tresillo: {
+    name: 'Tresillo',
+    noteCount: 3,
+    timingPattern: [2 / 6, 3 / 6, 1 / 6], // 0.333, 0.5, 0.167 - approximates 3+3+2
+    velocityAccents: [1.0, 1.0, 1.0],
+  },
+  habanera: {
+    name: 'Habanera',
+    noteCount: 4,
+    timingPattern: [2 / 6, 1 / 6, 2 / 6, 1 / 6], // 0.333, 0.167, 0.333, 0.167
+    velocityAccents: [1.0, 0.8, 1.0, 0.8],
+  },
+  cascade: {
+    name: 'Cascade',
+    noteCount: 4,
+    timingPattern: [2 / 6, 2 / 6, 1 / 6, 1 / 6], // Accelerating: positions at 0, 2/6, 4/6, 5/6
+    velocityAccents: [1.0, 0.9, 0.8, 0.7],
+    flexible: true,
+  },
+  ricochet: {
+    name: 'Ricochet',
+    noteCount: 4,
+    timingPattern: [1 / 6, 1 / 6, 2 / 6, 2 / 6], // Decelerating: positions at 0, 1/6, 2/6, 4/6
+    velocityAccents: [0.7, 0.8, 0.9, 1.0],
+    flexible: true,
+  },
+  paradiddle: {
+    name: 'Paradiddle',
+    noteCount: 4,
+    timingPattern: [2 / 6, 1 / 6, 2 / 6, 1 / 6], // Even but accented
+    velocityAccents: [1.0, 0.8, 1.0, 0.8],
+  },
+  // Extended Figures (variable notes)
+  fanfare: {
+    name: 'Fanfare',
+    noteCount: 5,
+    timingPattern: [2 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6], // Long-short-short-short-end
+    velocityAccents: [0.9, 0.7, 0.7, 0.7, 1.0],
+  },
+  flourish: {
+    name: 'Flourish',
+    noteCount: 6,
+    timingPattern: [1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6], // Even sixths
+    velocityAccents: [0.7, 0.75, 0.8, 0.85, 0.9, 1.0],
+  },
+  stutter: {
+    name: 'Stutter',
+    noteCount: 4,
+    timingPattern: [1 / 6, 1 / 6, 1 / 6, 3 / 6], // Rapid repeated then long
+    velocityAccents: [0.9, 0.85, 0.8, 1.0],
+    flexible: true,
+  },
+};
+
+/**
  * Helper to resolve which notes to operate on based on target
  */
-function resolveTargetNotes(
+export function resolveTargetNotes(
   sequence: Sequence,
   selectionManager: SelectionManager | null,
   target: TransformTarget
@@ -945,6 +1056,261 @@ export class SetLengthCommand implements Command {
   undo(): void {
     for (const entry of this.originalNotes) {
       this.sequence.updateNote(entry.step, entry.pitch, { duration: entry.oldDuration });
+    }
+  }
+}
+
+/**
+ * Helper to generate timing pattern for flexible figures
+ * that can apply to any note count.
+ *
+ * Generated patterns will be snapped to the 6-substep grid via snapToSubstep,
+ * but we use graduated weights to approximate the intended rhythmic effect.
+ */
+function generateFlexiblePattern(
+  figure: RhythmicFigure,
+  noteCount: number
+): { timing: number[]; accents: number[] } {
+  if (!figure.flexible || noteCount === figure.noteCount) {
+    return {
+      timing: figure.timingPattern,
+      accents: figure.velocityAccents || figure.timingPattern.map(() => 1.0),
+    };
+  }
+
+  // Generate pattern based on figure type
+  const timing: number[] = [];
+  const accents: number[] = [];
+
+  if (figure.name === 'Cascade') {
+    // Accelerating: each note gets progressively shorter
+    // Weights: n, n-1, n-2, ... 1 (decreasing)
+    let total = 0;
+    const weights: number[] = [];
+    for (let i = 0; i < noteCount; i++) {
+      const weight = noteCount - i;
+      weights.push(weight);
+      total += weight;
+    }
+    for (let i = 0; i < noteCount; i++) {
+      timing.push(weights[i] / total);
+      accents.push(1.0 - i * (0.3 / Math.max(1, noteCount - 1)));
+    }
+  } else if (figure.name === 'Ricochet') {
+    // Decelerating: each note gets progressively longer
+    // Weights: 1, 2, 3, ... n (increasing)
+    let total = 0;
+    const weights: number[] = [];
+    for (let i = 0; i < noteCount; i++) {
+      const weight = i + 1;
+      weights.push(weight);
+      total += weight;
+    }
+    for (let i = 0; i < noteCount; i++) {
+      timing.push(weights[i] / total);
+      accents.push(0.7 + i * (0.3 / Math.max(1, noteCount - 1)));
+    }
+  } else if (figure.name === 'Stutter') {
+    // Rapid repeated notes + final held note
+    // Use 3/6 (0.5) for held portion, remaining split among rapid notes
+    const rapidCount = noteCount - 1;
+    const heldPortion = 3 / 6; // 0.5 - grid aligned
+    const rapidPortion = 1.0 - heldPortion;
+
+    for (let i = 0; i < rapidCount; i++) {
+      timing.push(rapidPortion / rapidCount);
+      accents.push(0.9 - i * (0.1 / Math.max(1, rapidCount - 1)));
+    }
+    timing.push(heldPortion);
+    accents.push(1.0);
+  } else {
+    // Default: even spacing
+    for (let i = 0; i < noteCount; i++) {
+      timing.push(1.0 / noteCount);
+      accents.push(1.0);
+    }
+  }
+
+  return { timing, accents };
+}
+
+/**
+ * ApplyFigureCommand - Apply rhythmic figure to redistribute note timing
+ */
+export class ApplyFigureCommand implements Command {
+  readonly description: string;
+
+  private sequence: Sequence;
+  private selectionManager: SelectionManager | null;
+  private target: TransformTarget;
+  private figure: RhythmicFigure;
+  private applyAccents: boolean;
+
+  private originalNotes: Array<{
+    oldStep: number;
+    newStep: number;
+    pitch: number;
+    velocity: number;
+    newVelocity: number;
+    duration: number;
+    originalPitch: number;
+  }> = [];
+
+  constructor(
+    sequence: Sequence,
+    selectionManager: SelectionManager | null,
+    target: TransformTarget,
+    figure: RhythmicFigure,
+    applyAccents: boolean = true
+  ) {
+    this.sequence = sequence;
+    this.selectionManager = selectionManager;
+    this.target = target;
+    this.figure = figure;
+    this.applyAccents = applyAccents;
+    this.description = `Apply ${figure.name} figure to ${target} notes`;
+  }
+
+  execute(): void {
+    const targetNotes = resolveTargetNotes(this.sequence, this.selectionManager, this.target);
+    if (targetNotes.length === 0) return;
+
+    // Sort by step, then by pitch
+    targetNotes.sort((a, b) => {
+      if (a.step !== b.step) return a.step - b.step;
+      return a.pitch - b.pitch;
+    });
+
+    this.originalNotes = [];
+
+    // Determine time span based on target scope (use fixed boundaries, not note positions)
+    // This ensures the operation is idempotent - applying the same figure twice gives the same result
+    let startStep: number;
+    let endStep: number;
+
+    if (this.target === 'loop' || this.target === 'all') {
+      // Use loop markers as fixed boundaries
+      const { start, end } = this.sequence.getLoopMarkers();
+      startStep = start;
+      endStep = end;
+    } else {
+      // 'selected': use bounding box of selected notes
+      // This is the only case where we derive from note positions
+      startStep = Math.min(...targetNotes.map(n => n.step));
+      endStep = Math.max(...targetNotes.map(n => n.step)) + 1;
+    }
+
+    const totalSteps = endStep - startStep;
+
+    // Group notes by figure's note count
+    const groups: Array<typeof targetNotes> = [];
+    const noteCount = this.figure.noteCount;
+
+    for (let i = 0; i < targetNotes.length; i += noteCount) {
+      groups.push(targetNotes.slice(i, i + noteCount));
+    }
+
+    // Calculate step allocation per group
+    const stepsPerGroup = totalSteps / groups.length;
+
+    // Apply timing pattern to each group
+    let groupStartStep = startStep;
+    for (const group of groups) {
+      // Get timing pattern (may be generated for flexible figures)
+      const { timing, accents } = this.figure.flexible
+        ? generateFlexiblePattern(this.figure, group.length)
+        : {
+            timing: this.figure.timingPattern,
+            accents:
+              this.figure.velocityAccents ||
+              this.figure.timingPattern.map(() => 1.0),
+          };
+
+      // If group has fewer notes than pattern, use even spacing for leftover
+      const useEvenSpacing = group.length < noteCount && !this.figure.flexible;
+
+      let cumulativeTime = 0;
+      for (let i = 0; i < group.length; i++) {
+        const { step, pitch, note } = group[i];
+
+        let newStep: number;
+        let velocityMultiplier: number;
+
+        if (useEvenSpacing) {
+          // Leftover group: even spacing
+          newStep = groupStartStep + (stepsPerGroup * i) / group.length;
+          velocityMultiplier = 1.0;
+        } else {
+          // Apply figure pattern
+          newStep = groupStartStep + cumulativeTime * stepsPerGroup;
+          velocityMultiplier = accents[i] ?? 1.0;
+          cumulativeTime += timing[i] ?? 1.0 / group.length;
+        }
+
+        // Snap to valid substep position
+        newStep = snapToSubstep(newStep);
+
+        // Calculate new velocity with accent
+        const newVelocity = this.applyAccents
+          ? Math.min(127, Math.max(1, Math.round(note.velocity * velocityMultiplier)))
+          : note.velocity;
+
+        this.originalNotes.push({
+          oldStep: step,
+          newStep,
+          pitch,
+          velocity: note.velocity,
+          newVelocity,
+          duration: note.duration,
+          originalPitch: note.originalPitch ?? pitch,
+        });
+      }
+
+      groupStartStep += stepsPerGroup;
+    }
+
+    // Remove all affected notes first
+    for (const { oldStep, pitch } of this.originalNotes) {
+      this.sequence.removeNote(oldStep, pitch);
+    }
+
+    // Add notes at new positions with new velocities
+    for (const moved of this.originalNotes) {
+      this.sequence.addNote(
+        moved.newStep,
+        moved.pitch,
+        moved.newVelocity,
+        moved.duration,
+        moved.originalPitch
+      );
+
+      // Update selection
+      if (this.selectionManager?.isSelected(moved.oldStep, moved.pitch)) {
+        this.selectionManager.moveNote(moved.oldStep, moved.pitch, moved.newStep, moved.pitch);
+      }
+    }
+  }
+
+  undo(): void {
+    // Remove notes from new positions
+    for (const { newStep, pitch } of this.originalNotes) {
+      this.sequence.removeNote(newStep, pitch);
+    }
+
+    // Restore notes at original positions with original velocities
+    for (const moved of this.originalNotes) {
+      this.sequence.addNote(
+        moved.oldStep,
+        moved.pitch,
+        moved.velocity,
+        moved.duration,
+        moved.originalPitch
+      );
+
+      // Update selection back
+      if (this.selectionManager?.isSelected(moved.newStep, moved.pitch)) {
+        this.selectionManager.moveNote(moved.newStep, moved.pitch, moved.oldStep, moved.pitch);
+      }
     }
   }
 }
