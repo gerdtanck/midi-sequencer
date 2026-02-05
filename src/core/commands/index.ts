@@ -13,4 +13,5 @@ export {
   RandomizeCommand,
   QuantizeCommand,
   ClearSequenceCommand,
+  SetLengthCommand,
 } from './TransformCommands';

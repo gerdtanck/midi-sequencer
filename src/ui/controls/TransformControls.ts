@@ -8,6 +8,7 @@ import {
   RandomizeProperty,
   QuantizeCommand,
   ClearSequenceCommand,
+  SetLengthCommand,
 } from '@/core/commands/TransformCommands';
 
 /**
@@ -35,6 +36,7 @@ export class TransformControls {
   private quantizeBtn: HTMLButtonElement | null = null;
   private randomizeSelect: HTMLSelectElement | null = null;
   private randomizeBtn: HTMLButtonElement | null = null;
+  private lengthSelect: HTMLSelectElement | null = null;
   private clearBtn: HTMLButtonElement | null = null;
 
   constructor(container: HTMLElement, noteGrid: NoteGrid) {
@@ -143,6 +145,7 @@ export class TransformControls {
       { value: 'timing', label: 'Timing' },
       { value: 'step', label: 'Step' },
       { value: 'pitch', label: 'Pitch' },
+      { value: 'length', label: 'Length' },
       { value: 'permute', label: 'Permute' },
     ];
 
@@ -161,6 +164,48 @@ export class TransformControls {
     randomizeRow.appendChild(randomizeGroup);
 
     section.appendChild(randomizeRow);
+
+    // Length row
+    const lengthRow = document.createElement('div');
+    lengthRow.className = 'transform-btn-row';
+
+    const lengthGroup = document.createElement('div');
+    lengthGroup.className = 'transform-length-group';
+
+    const lengthLabel = document.createElement('span');
+    lengthLabel.className = 'transform-label';
+    lengthLabel.textContent = 'Length';
+    lengthGroup.appendChild(lengthLabel);
+
+    this.lengthSelect = document.createElement('select');
+    this.lengthSelect.className = 'transform-length-select';
+    this.lengthSelect.title = 'Set note length';
+
+    const lengthOptions: Array<{ value: string; label: string }> = [
+      { value: '0.25', label: '1/64' },
+      { value: '0.5', label: '1/32' },
+      { value: '1', label: '1/16' },
+      { value: '2', label: '1/8' },
+      { value: '4', label: '1/4' },
+      { value: '8', label: '1/2' },
+      { value: '16', label: '1/1' },
+    ];
+
+    for (const { value, label } of lengthOptions) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      this.lengthSelect.appendChild(option);
+    }
+
+    // Default to 1/16 (1 step)
+    this.lengthSelect.value = '1';
+
+    this.lengthSelect.addEventListener('change', () => this.setLength());
+    lengthGroup.appendChild(this.lengthSelect);
+    lengthRow.appendChild(lengthGroup);
+
+    section.appendChild(lengthRow);
 
     // Clear row
     const clearRow = document.createElement('div');
@@ -252,6 +297,11 @@ export class TransformControls {
     // Clear button is always enabled if there are notes in the target scope
     if (this.clearBtn) {
       this.clearBtn.disabled = !hasNotes || !isTargetValid;
+    }
+
+    // Length select follows same rules
+    if (this.lengthSelect) {
+      this.lengthSelect.disabled = !hasNotes || !isTargetValid;
     }
   }
 
@@ -366,6 +416,27 @@ export class TransformControls {
       sequence,
       selectionManager,
       this.getTarget()
+    );
+
+    this.noteGrid.getCommandHistory().execute(command);
+    this.noteGrid.forceRender();
+  }
+
+  /**
+   * Set all notes to selected length
+   */
+  private setLength(): void {
+    const sequence = this.noteGrid.getSequence();
+    const selectionManager = this.noteGrid.getSelectionManager();
+    if (!sequence) return;
+
+    const duration = parseFloat(this.lengthSelect?.value || '1');
+
+    const command = new SetLengthCommand(
+      sequence,
+      selectionManager,
+      this.getTarget(),
+      duration
     );
 
     this.noteGrid.getCommandHistory().execute(command);
@@ -513,6 +584,39 @@ export class TransformControls {
       }
 
       .transform-randomize-select option {
+        background-color: var(--grid-background);
+        color: var(--control-text);
+      }
+
+      .transform-length-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+      }
+
+      .transform-length-select {
+        flex: 1;
+        padding: 6px 8px;
+        font-size: 0.8rem;
+        background-color: var(--grid-background);
+        border: 1px solid var(--control-border);
+        border-radius: 4px;
+        color: var(--control-text);
+        cursor: pointer;
+        outline: none;
+      }
+
+      .transform-length-select:focus {
+        border-color: var(--control-accent);
+      }
+
+      .transform-length-select:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .transform-length-select option {
         background-color: var(--grid-background);
         color: var(--control-text);
       }

@@ -404,7 +404,7 @@ export class ReverseNotesCommand implements Command {
 /**
  * Randomize property type
  */
-export type RandomizeProperty = 'velocity' | 'timing' | 'pitch' | 'permute' | 'step';
+export type RandomizeProperty = 'velocity' | 'timing' | 'pitch' | 'permute' | 'step' | 'length';
 
 /**
  * RandomizeCommand - Randomize velocity, timing, or pitch
@@ -427,6 +427,7 @@ export class RandomizeCommand implements Command {
     newStep?: number;
     newPitch?: number;
     newVelocity?: number;
+    newDuration?: number;
     newOriginalPitch?: number; // For permute: the originalPitch that moves with the pitch
   }> = [];
 
@@ -522,20 +523,56 @@ export class RandomizeCommand implements Command {
           // Chromatic scale or no scale manager - use full range
           entry.newPitch = Math.floor(Math.random() * (maxPitch - minPitch + 1)) + minPitch;
         }
-      } else if (this.property === 'step') {
-        // Preserve substep offset, randomize whole step position
-        const wholeStep = Math.floor(step);
-        const substepOffset = step - wholeStep;
-
-        // Random whole step within range
-        const rangeSize = stepRangeMax - stepRangeMin;
-        if (rangeSize > 0) {
-          const newWholeStep = stepRangeMin + Math.floor(Math.random() * rangeSize);
-          entry.newStep = newWholeStep + substepOffset;
-        }
+      } else if (this.property === 'length') {
+        // Random duration from 1/64 (0.25 steps) to 1/1 (16 steps)
+        // Use musically meaningful values: 0.25, 0.5, 1, 2, 4, 8, 16
+        const durations = [0.25, 0.5, 1, 2, 4, 8, 16];
+        entry.newDuration = durations[Math.floor(Math.random() * durations.length)];
       }
+      // Note: 'step' randomization is handled separately below to avoid collisions
 
       this.originalNotes.push(entry);
+    }
+
+    // For step randomization, assign unique steps per pitch to avoid collisions
+    if (this.property === 'step') {
+      const rangeSize = stepRangeMax - stepRangeMin;
+      if (rangeSize > 0) {
+        // Group entries by pitch
+        const byPitch = new Map<number, Array<(typeof this.originalNotes)[0]>>();
+        for (const entry of this.originalNotes) {
+          const group = byPitch.get(entry.pitch) || [];
+          group.push(entry);
+          byPitch.set(entry.pitch, group);
+        }
+
+        // For each pitch group, assign random unique steps
+        for (const [, entries] of byPitch) {
+          // Generate available steps (as many as needed, up to rangeSize)
+          const availableSteps: number[] = [];
+          for (let s = stepRangeMin; s < stepRangeMax; s++) {
+            availableSteps.push(s);
+          }
+
+          // Shuffle available steps
+          for (let i = availableSteps.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [availableSteps[i], availableSteps[j]] = [availableSteps[j], availableSteps[i]];
+          }
+
+          // Assign unique steps to each entry, preserving substep offset
+          for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i];
+            const substepOffset = entry.step - Math.floor(entry.step);
+            if (i < availableSteps.length) {
+              entry.newStep = availableSteps[i] + substepOffset;
+            } else {
+              // More notes than available steps - keep original position
+              entry.newStep = entry.step;
+            }
+          }
+        }
+      }
     }
 
     // For permute, shuffle pitches across all entries (must be done after collecting all)
@@ -563,6 +600,12 @@ export class RandomizeCommand implements Command {
       for (const entry of this.originalNotes) {
         if (entry.newVelocity !== undefined) {
           this.sequence.updateNote(entry.step, entry.pitch, { velocity: entry.newVelocity });
+        }
+      }
+    } else if (this.property === 'length') {
+      for (const entry of this.originalNotes) {
+        if (entry.newDuration !== undefined) {
+          this.sequence.updateNote(entry.step, entry.pitch, { duration: entry.newDuration });
         }
       }
     } else if (this.property === 'timing' || this.property === 'step') {
@@ -630,6 +673,10 @@ export class RandomizeCommand implements Command {
     if (this.property === 'velocity') {
       for (const entry of this.originalNotes) {
         this.sequence.updateNote(entry.step, entry.pitch, { velocity: entry.velocity });
+      }
+    } else if (this.property === 'length') {
+      for (const entry of this.originalNotes) {
+        this.sequence.updateNote(entry.step, entry.pitch, { duration: entry.duration });
       }
     } else if (this.property === 'timing' || this.property === 'step') {
       // Remove from new positions
@@ -844,6 +891,60 @@ export class ClearSequenceCommand implements Command {
         note.duration,
         note.originalPitch
       );
+    }
+  }
+}
+
+/**
+ * SetLengthCommand - Set all notes to a specific duration
+ */
+export class SetLengthCommand implements Command {
+  readonly description: string;
+
+  private sequence: Sequence;
+  private selectionManager: SelectionManager | null;
+  private target: TransformTarget;
+  private newDuration: number;
+
+  private originalNotes: Array<{
+    step: number;
+    pitch: number;
+    oldDuration: number;
+  }> = [];
+
+  constructor(
+    sequence: Sequence,
+    selectionManager: SelectionManager | null,
+    target: TransformTarget,
+    duration: number
+  ) {
+    this.sequence = sequence;
+    this.selectionManager = selectionManager;
+    this.target = target;
+    this.newDuration = duration;
+    this.description = `Set ${target} notes length to ${duration}`;
+  }
+
+  execute(): void {
+    const targetNotes = resolveTargetNotes(this.sequence, this.selectionManager, this.target);
+    if (targetNotes.length === 0) return;
+
+    this.originalNotes = [];
+
+    for (const { step, pitch, note } of targetNotes) {
+      this.originalNotes.push({
+        step,
+        pitch,
+        oldDuration: note.duration,
+      });
+
+      this.sequence.updateNote(step, pitch, { duration: this.newDuration });
+    }
+  }
+
+  undo(): void {
+    for (const entry of this.originalNotes) {
+      this.sequence.updateNote(entry.step, entry.pitch, { duration: entry.oldDuration });
     }
   }
 }
