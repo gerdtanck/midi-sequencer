@@ -450,6 +450,15 @@ export class NoteRenderer {
   }
 
   /**
+   * Get a note's original pitch (for scale-aware operations)
+   * Returns the originalPitch if set, otherwise the current pitch
+   */
+  getNoteOriginalPitch(step: number, pitch: number): number {
+    const note = this.sequence.getNoteAt(step, pitch);
+    return note?.originalPitch ?? pitch;
+  }
+
+  /**
    * Temporarily offset notes visually during drag (doesn't modify sequence data)
    * @param notes Notes to offset
    * @param deltaStep Horizontal offset in steps

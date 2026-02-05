@@ -708,11 +708,11 @@ export class NoteInteractionController {
 
       if (useScaleSnap && this.scaleManager) {
         // Build target positions with scale-aware pitch snapping
+        // Use originalPitch to match MoveNotesCommand behavior exactly
         const targets = this.dragNotes.map(note => {
-          // Calculate target pitch by snapping moved pitch to scale
-          // Note: The final MoveNotesCommand will use originalPitch for accurate calculation
-          const movedPitch = note.pitch + deltaPitch;
-          const targetPitch = this.scaleManager!.snapToScale(movedPitch);
+          const originalPitch = this.noteRenderer!.getNoteOriginalPitch(note.step, note.pitch);
+          const newOriginalPitch = originalPitch + deltaPitch;
+          const targetPitch = this.scaleManager!.snapToScale(newOriginalPitch);
           return {
             step: note.step,
             pitch: note.pitch,
@@ -731,10 +731,13 @@ export class NoteInteractionController {
     // Audition notes when pitch changes
     if (this.onNoteAudition && deltaPitch !== this.lastAuditionedDeltaPitch) {
       this.lastAuditionedDeltaPitch = deltaPitch;
-      // For audition, also snap to scale if enabled
+      // For audition, also snap to scale if enabled (using originalPitch for consistency)
       let pitches: number[];
-      if (this.scaleManager?.snapEnabled && !this.scaleManager?.isChromatic()) {
-        pitches = this.dragNotes.map(n => this.scaleManager!.snapToScale(n.pitch + deltaPitch));
+      if (this.scaleManager?.snapEnabled && !this.scaleManager?.isChromatic() && this.noteRenderer) {
+        pitches = this.dragNotes.map(n => {
+          const originalPitch = this.noteRenderer!.getNoteOriginalPitch(n.step, n.pitch);
+          return this.scaleManager!.snapToScale(originalPitch + deltaPitch);
+        });
       } else {
         pitches = this.dragNotes.map(n => n.pitch + deltaPitch);
       }
