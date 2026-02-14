@@ -90,6 +90,23 @@ export class ScaleManager {
   }
 
   /**
+   * Get all MIDI pitches matching a chord (root + intervals) within a range
+   */
+  getChordPitches(intervals: number[], minPitch = 0, maxPitch = 127): number[] {
+    const pitchClasses = new Set<number>();
+    for (const interval of intervals) {
+      pitchClasses.add(((this._root + interval) % 12 + 12) % 12);
+    }
+    const pitches: number[] = [];
+    for (let pitch = minPitch; pitch <= maxPitch; pitch++) {
+      if (pitchClasses.has(((pitch % 12) + 12) % 12)) {
+        pitches.push(pitch);
+      }
+    }
+    return pitches;
+  }
+
+  /**
    * Get all pitches in the scale for a specific octave
    * @param octave MIDI octave (e.g., 3 for C3-B3)
    */

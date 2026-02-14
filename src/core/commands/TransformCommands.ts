@@ -108,6 +108,44 @@ export const FIGURES: Record<string, RhythmicFigure> = {
 };
 
 /**
+ * Chord definition
+ */
+export interface ChordDefinition {
+  name: string;
+  intervals: number[]; // semitone intervals from root
+}
+
+/**
+ * Available chord types
+ */
+export const CHORDS: Record<string, ChordDefinition> = {
+  // --- Common ---
+  major:        { name: 'Major',         intervals: [0, 4, 7] },
+  minor:        { name: 'Minor',         intervals: [0, 3, 7] },
+  dom7:         { name: '7th',           intervals: [0, 4, 7, 10] },
+  maj7:         { name: 'Maj7',          intervals: [0, 4, 7, 11] },
+  min7:         { name: 'Min7',          intervals: [0, 3, 7, 10] },
+  sus2:         { name: 'Sus2',          intervals: [0, 2, 7] },
+  sus4:         { name: 'Sus4',          intervals: [0, 5, 7] },
+  dim:          { name: 'Dim',           intervals: [0, 3, 6] },
+  aug:          { name: 'Aug',           intervals: [0, 4, 8] },
+  power:        { name: 'Power (5th)',   intervals: [0, 7] },
+  // --- Extended / Uncommon ---
+  min7b5:       { name: 'Min7b5',        intervals: [0, 3, 6, 10] },
+  dim7:         { name: 'Dim7',          intervals: [0, 3, 6, 9] },
+  aug7:         { name: 'Aug7',          intervals: [0, 4, 8, 10] },
+  dom9:         { name: '9th',           intervals: [0, 4, 7, 10, 14] },
+  maj9:         { name: 'Maj9',          intervals: [0, 4, 7, 11, 14] },
+  min9:         { name: 'Min9',          intervals: [0, 3, 7, 10, 14] },
+  add9:         { name: 'Add9',          intervals: [0, 4, 7, 14] },
+  dom11:        { name: '11th',          intervals: [0, 4, 7, 10, 14, 17] },
+  dom13:        { name: '13th',          intervals: [0, 4, 7, 10, 14, 17, 21] },
+  min11:        { name: 'Min11',         intervals: [0, 3, 7, 10, 14, 17] },
+  maj7sharp11:  { name: 'Maj7#11',       intervals: [0, 4, 7, 11, 18] },
+  dom7sharp9:   { name: '7#9 (Hendrix)', intervals: [0, 4, 7, 10, 15] },
+};
+
+/**
  * Helper to resolve which notes to operate on based on target
  */
 export function resolveTargetNotes(
@@ -1283,6 +1321,129 @@ export class ApplyFigureCommand implements Command {
       // Update selection back
       if (this.selectionManager?.isSelected(moved.newStep, moved.pitch)) {
         this.selectionManager.moveNote(moved.newStep, moved.pitch, moved.oldStep, moved.pitch);
+      }
+    }
+  }
+}
+
+/**
+ * Find the nearest pitch that belongs to a set of pitch classes
+ */
+function nearestChordPitch(pitch: number, chordPitchClasses: Set<number>): number {
+  if (chordPitchClasses.has(((pitch % 12) + 12) % 12)) return pitch;
+
+  let below = pitch - 1, above = pitch + 1;
+  while (below >= 0 || above <= 127) {
+    if (below >= 0 && chordPitchClasses.has(((below % 12) + 12) % 12)) return below;
+    if (above <= 127 && chordPitchClasses.has(((above % 12) + 12) % 12)) return above;
+    below--;
+    above++;
+  }
+  return pitch; // fallback
+}
+
+/**
+ * ChordQuantizeCommand - Snap note pitches to the nearest chord tone
+ */
+export class ChordQuantizeCommand implements Command {
+  readonly description: string;
+
+  private sequence: Sequence;
+  private selectionManager: SelectionManager | null;
+  private target: TransformTarget;
+  private chordIntervals: number[];
+  private root: number;
+
+  private movedNotes: Array<{
+    step: number;
+    oldPitch: number;
+    newPitch: number;
+    velocity: number;
+    duration: number;
+    originalPitch: number;
+  }> = [];
+
+  constructor(
+    sequence: Sequence,
+    selectionManager: SelectionManager | null,
+    target: TransformTarget,
+    chordIntervals: number[],
+    root: number
+  ) {
+    this.sequence = sequence;
+    this.selectionManager = selectionManager;
+    this.target = target;
+    this.chordIntervals = chordIntervals;
+    this.root = root;
+    this.description = `Chord quantize ${target} notes`;
+  }
+
+  execute(): void {
+    const targetNotes = resolveTargetNotes(this.sequence, this.selectionManager, this.target);
+    if (targetNotes.length === 0) return;
+
+    // Build pitch class set from root + intervals
+    const chordPitchClasses = new Set<number>();
+    for (const interval of this.chordIntervals) {
+      chordPitchClasses.add(((this.root + interval) % 12 + 12) % 12);
+    }
+
+    this.movedNotes = [];
+
+    for (const { step, pitch, note } of targetNotes) {
+      const newPitch = nearestChordPitch(pitch, chordPitchClasses);
+
+      this.movedNotes.push({
+        step,
+        oldPitch: pitch,
+        newPitch,
+        velocity: note.velocity,
+        duration: note.duration,
+        originalPitch: note.originalPitch ?? pitch,
+      });
+    }
+
+    // Remove all affected notes first
+    for (const { step, oldPitch } of this.movedNotes) {
+      this.sequence.removeNote(step, oldPitch);
+    }
+
+    // Add notes at new pitches
+    for (const moved of this.movedNotes) {
+      this.sequence.addNote(
+        moved.step,
+        moved.newPitch,
+        moved.velocity,
+        moved.duration,
+        moved.newPitch // originalPitch = new pitch (quantized)
+      );
+
+      // Update selection
+      if (this.selectionManager?.isSelected(moved.step, moved.oldPitch)) {
+        this.selectionManager.moveNote(moved.step, moved.oldPitch, moved.step, moved.newPitch);
+      }
+    }
+  }
+
+  undo(): void {
+    // Remove notes from new pitches
+    for (const { step, newPitch } of this.movedNotes) {
+      this.sequence.removeNote(step, newPitch);
+    }
+
+    // Restore notes at original pitches
+    for (const moved of this.movedNotes) {
+      this.sequence.addNote(
+        moved.step,
+        moved.oldPitch,
+        moved.velocity,
+        moved.duration,
+        moved.originalPitch
+      );
+
+      // Update selection back
+      if (this.selectionManager?.isSelected(moved.step, moved.newPitch)) {
+        this.selectionManager.moveNote(moved.step, moved.newPitch, moved.step, moved.oldPitch);
       }
     }
   }

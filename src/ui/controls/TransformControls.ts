@@ -10,7 +10,9 @@ import {
   ClearSequenceCommand,
   SetLengthCommand,
   ApplyFigureCommand,
+  ChordQuantizeCommand,
   FIGURES,
+  CHORDS,
 } from '@/core/commands/TransformCommands';
 
 /**
@@ -38,6 +40,8 @@ export class TransformControls {
   private quantizeBtn: HTMLButtonElement | null = null;
   private randomizeSelect: HTMLSelectElement | null = null;
   private randomizeBtn: HTMLButtonElement | null = null;
+  private chordSelect: HTMLSelectElement | null = null;
+  private chordApplyBtn: HTMLButtonElement | null = null;
   private figureSelect: HTMLSelectElement | null = null;
   private figureAccentCheckbox: HTMLInputElement | null = null;
   private figureApplyBtn: HTMLButtonElement | null = null;
@@ -169,6 +173,33 @@ export class TransformControls {
     randomizeRow.appendChild(randomizeGroup);
 
     section.appendChild(randomizeRow);
+
+    // Chord quantize row
+    const chordRow = document.createElement('div');
+    chordRow.className = 'transform-btn-row';
+
+    const chordGroup = document.createElement('div');
+    chordGroup.className = 'transform-randomize-group';
+
+    this.chordSelect = document.createElement('select');
+    this.chordSelect.className = 'transform-randomize-select';
+    this.chordSelect.title = 'Chord Type';
+
+    for (const key of Object.keys(CHORDS)) {
+      const option = document.createElement('option');
+      option.value = key;
+      option.textContent = CHORDS[key].name;
+      this.chordSelect.appendChild(option);
+    }
+
+    this.chordApplyBtn = this.createButton('♫', 'Quantize to chord', () => this.chordQuantize());
+    this.chordApplyBtn.className = 'transform-btn';
+
+    chordGroup.appendChild(this.chordSelect);
+    chordGroup.appendChild(this.chordApplyBtn);
+    chordRow.appendChild(chordGroup);
+
+    section.appendChild(chordRow);
 
     // Figure row
     const figureRow = document.createElement('div');
@@ -341,6 +372,7 @@ export class TransformControls {
       this.reverseBtn,
       this.quantizeBtn,
       this.randomizeBtn,
+      this.chordApplyBtn,
       this.figureApplyBtn,
     ];
 
@@ -459,6 +491,31 @@ export class TransformControls {
       this.getTarget(),
       property,
       scaleManager
+    );
+
+    this.noteGrid.getCommandHistory().execute(command);
+    this.noteGrid.forceRender();
+  }
+
+  /**
+   * Quantize notes to chord tones
+   */
+  private chordQuantize(): void {
+    const sequence = this.noteGrid.getSequence();
+    const selectionManager = this.noteGrid.getSelectionManager();
+    const scaleManager = this.noteGrid.getScaleManager();
+    if (!sequence || !scaleManager) return;
+
+    const chordKey = this.chordSelect?.value || 'major';
+    const chord = CHORDS[chordKey];
+    if (!chord) return;
+
+    const command = new ChordQuantizeCommand(
+      sequence,
+      selectionManager,
+      this.getTarget(),
+      chord.intervals,
+      scaleManager.root
     );
 
     this.noteGrid.getCommandHistory().execute(command);
