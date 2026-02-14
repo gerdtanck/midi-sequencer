@@ -14,6 +14,7 @@ import {
   FIGURES,
   CHORDS,
 } from '@/core/commands/TransformCommands';
+import { ROOT_NOTES } from '@/core/Scale';
 
 /**
  * TransformControls - UI component for note transformation operations
@@ -40,6 +41,7 @@ export class TransformControls {
   private quantizeBtn: HTMLButtonElement | null = null;
   private randomizeSelect: HTMLSelectElement | null = null;
   private randomizeBtn: HTMLButtonElement | null = null;
+  private chordDegreeSelect: HTMLSelectElement | null = null;
   private chordSelect: HTMLSelectElement | null = null;
   private chordApplyBtn: HTMLButtonElement | null = null;
   private figureSelect: HTMLSelectElement | null = null;
@@ -181,6 +183,11 @@ export class TransformControls {
     const chordGroup = document.createElement('div');
     chordGroup.className = 'transform-randomize-group';
 
+    this.chordDegreeSelect = document.createElement('select');
+    this.chordDegreeSelect.className = 'transform-chord-degree-select';
+    this.chordDegreeSelect.title = 'Chord Root (Scale Degree)';
+    this.populateChordDegrees();
+
     this.chordSelect = document.createElement('select');
     this.chordSelect.className = 'transform-randomize-select';
     this.chordSelect.title = 'Chord Type';
@@ -195,6 +202,7 @@ export class TransformControls {
     this.chordApplyBtn = this.createButton('♫', 'Quantize to chord', () => this.chordQuantize());
     this.chordApplyBtn.className = 'transform-btn';
 
+    chordGroup.appendChild(this.chordDegreeSelect);
     chordGroup.appendChild(this.chordSelect);
     chordGroup.appendChild(this.chordApplyBtn);
     chordRow.appendChild(chordGroup);
@@ -310,6 +318,12 @@ export class TransformControls {
 
     // Add styles
     this.addStyles();
+
+    // Subscribe to scale changes to update chord degree dropdown
+    const scaleManager = this.noteGrid.getScaleManager();
+    if (scaleManager) {
+      scaleManager.onChange(() => this.populateChordDegrees());
+    }
 
     // Subscribe to selection changes to update button states
     const selectionManager = this.noteGrid.getSelectionManager();
@@ -497,6 +511,53 @@ export class TransformControls {
     this.noteGrid.forceRender();
   }
 
+  private static readonly ROMAN_NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+
+  /**
+   * Populate chord degree dropdown based on current scale
+   */
+  private populateChordDegrees(): void {
+    if (!this.chordDegreeSelect) return;
+
+    const scaleManager = this.noteGrid.getScaleManager();
+    const previousValue = this.chordDegreeSelect.value;
+    this.chordDegreeSelect.innerHTML = '';
+
+    if (!scaleManager) return;
+
+    const root = scaleManager.root;
+    const intervals = scaleManager.scale.intervals;
+    const isChromatic = scaleManager.isChromatic();
+
+    if (isChromatic) {
+      // Chromatic: show all 12 note names, no Roman numerals
+      for (let i = 0; i < 12; i++) {
+        const pitchClass = (root + i) % 12;
+        const option = document.createElement('option');
+        option.value = String(i);
+        option.textContent = ROOT_NOTES[pitchClass];
+        this.chordDegreeSelect.appendChild(option);
+      }
+    } else {
+      // Non-chromatic: show Roman numeral + note name
+      for (let i = 0; i < intervals.length; i++) {
+        const pitchClass = (root + intervals[i]) % 12;
+        const numeral = TransformControls.ROMAN_NUMERALS[i] ?? String(i + 1);
+        const option = document.createElement('option');
+        option.value = String(i);
+        option.textContent = `${numeral} (${ROOT_NOTES[pitchClass]})`;
+        this.chordDegreeSelect.appendChild(option);
+      }
+    }
+
+    // Restore previous selection if still valid, otherwise default to 0
+    if (previousValue && this.chordDegreeSelect.querySelector(`option[value="${previousValue}"]`)) {
+      this.chordDegreeSelect.value = previousValue;
+    } else {
+      this.chordDegreeSelect.value = '0';
+    }
+  }
+
   /**
    * Quantize notes to chord tones
    */
@@ -510,12 +571,19 @@ export class TransformControls {
     const chord = CHORDS[chordKey];
     if (!chord) return;
 
+    // Compute chord root from selected scale degree
+    const degreeIndex = parseInt(this.chordDegreeSelect?.value || '0', 10);
+    const intervals = scaleManager.scale.intervals;
+    const isChromatic = scaleManager.isChromatic();
+    const semitoneOffset = isChromatic ? degreeIndex : (intervals[degreeIndex] ?? 0);
+    const chordRoot = (scaleManager.root + semitoneOffset) % 12;
+
     const command = new ChordQuantizeCommand(
       sequence,
       selectionManager,
       this.getTarget(),
       chord.intervals,
-      scaleManager.root
+      chordRoot
     );
 
     this.noteGrid.getCommandHistory().execute(command);
@@ -728,6 +796,28 @@ export class TransformControls {
       }
 
       .transform-randomize-select option {
+        background-color: var(--grid-background);
+        color: var(--control-text);
+      }
+
+      .transform-chord-degree-select {
+        width: 72px;
+        flex: 0 0 auto;
+        padding: 6px 4px;
+        font-size: 0.8rem;
+        background-color: var(--grid-background);
+        border: 1px solid var(--control-border);
+        border-radius: 4px;
+        color: var(--control-text);
+        cursor: pointer;
+        outline: none;
+      }
+
+      .transform-chord-degree-select:focus {
+        border-color: var(--control-accent);
+      }
+
+      .transform-chord-degree-select option {
         background-color: var(--grid-background);
         color: var(--control-text);
       }

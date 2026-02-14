@@ -618,6 +618,9 @@ export class RandomizeCommand implements Command {
       }
     }
 
+    // Track occupied pitches per step to prevent overlaps during pitch randomization
+    const pitchOccupiedByStep = new Map<number, Set<number>>();
+
     // Store original values and calculate new values
     for (const { step, pitch, note } of targetNotes) {
       const entry: (typeof this.originalNotes)[0] = {
@@ -640,24 +643,34 @@ export class RandomizeCommand implements Command {
         const minPitch = Math.max(0, centerPitch - 12);
         const maxPitch = Math.min(127, centerPitch + 12);
 
-        // Always respect the active scale (not just when snap is enabled)
+        // Track occupied pitches per step to prevent overlaps
+        if (!pitchOccupiedByStep.has(step)) {
+          pitchOccupiedByStep.set(step, new Set<number>());
+        }
+        const occupied = pitchOccupiedByStep.get(step)!;
+
+        // Build candidate pitches (respecting scale, excluding occupied)
+        const candidates: number[] = [];
         if (this.scaleManager && !this.scaleManager.isChromatic()) {
-          // Get scale pitches within range
-          const scalePitches: number[] = [];
           for (let p = minPitch; p <= maxPitch; p++) {
-            if (this.scaleManager.isInScale(p)) {
-              scalePitches.push(p);
+            if (this.scaleManager.isInScale(p) && !occupied.has(p)) {
+              candidates.push(p);
             }
           }
-          if (scalePitches.length > 0) {
-            entry.newPitch = scalePitches[Math.floor(Math.random() * scalePitches.length)];
-          } else {
-            entry.newPitch = pitch;
-          }
         } else {
-          // Chromatic scale or no scale manager - use full range
-          entry.newPitch = Math.floor(Math.random() * (maxPitch - minPitch + 1)) + minPitch;
+          for (let p = minPitch; p <= maxPitch; p++) {
+            if (!occupied.has(p)) {
+              candidates.push(p);
+            }
+          }
         }
+
+        if (candidates.length > 0) {
+          entry.newPitch = candidates[Math.floor(Math.random() * candidates.length)];
+        } else {
+          entry.newPitch = pitch; // fallback: keep original if no room
+        }
+        occupied.add(entry.newPitch);
       } else if (this.property === 'length') {
         // Random duration from 1/64 (0.25 steps) to 1/1 (16 steps)
         // Use musically meaningful values: 0.25, 0.5, 1, 2, 4, 8, 16
@@ -1327,15 +1340,23 @@ export class ApplyFigureCommand implements Command {
 }
 
 /**
- * Find the nearest pitch that belongs to a set of pitch classes
+ * Find the nearest pitch that belongs to a set of pitch classes,
+ * optionally excluding specific pitches (to avoid overlaps at the same step)
  */
-function nearestChordPitch(pitch: number, chordPitchClasses: Set<number>): number {
-  if (chordPitchClasses.has(((pitch % 12) + 12) % 12)) return pitch;
+function nearestChordPitch(
+  pitch: number,
+  chordPitchClasses: Set<number>,
+  excludedPitches?: Set<number>
+): number {
+  const isAllowed = (p: number) =>
+    chordPitchClasses.has(((p % 12) + 12) % 12) && (!excludedPitches || !excludedPitches.has(p));
+
+  if (isAllowed(pitch)) return pitch;
 
   let below = pitch - 1, above = pitch + 1;
   while (below >= 0 || above <= 127) {
-    if (below >= 0 && chordPitchClasses.has(((below % 12) + 12) % 12)) return below;
-    if (above <= 127 && chordPitchClasses.has(((above % 12) + 12) % 12)) return above;
+    if (below >= 0 && isAllowed(below)) return below;
+    if (above <= 127 && isAllowed(above)) return above;
     below--;
     above++;
   }
@@ -1390,8 +1411,18 @@ export class ChordQuantizeCommand implements Command {
 
     this.movedNotes = [];
 
+    // Track occupied pitches per step to prevent overlaps
+    const occupiedByStep = new Map<number, Set<number>>();
+
     for (const { step, pitch, note } of targetNotes) {
-      const newPitch = nearestChordPitch(pitch, chordPitchClasses);
+      let occupied = occupiedByStep.get(step);
+      if (!occupied) {
+        occupied = new Set<number>();
+        occupiedByStep.set(step, occupied);
+      }
+
+      const newPitch = nearestChordPitch(pitch, chordPitchClasses, occupied);
+      occupied.add(newPitch);
 
       this.movedNotes.push({
         step,
