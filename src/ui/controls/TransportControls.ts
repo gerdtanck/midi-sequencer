@@ -32,6 +32,7 @@ export class TransportControls {
 
   // UI elements
   private sequenceButtons: HTMLButtonElement[] = [];
+  private muteButtons: HTMLButtonElement[] = [];
   private playButton: HTMLButtonElement | null = null;
   private bpmInput: HTMLInputElement | null = null;
   private channelSelect: HTMLSelectElement | null = null;
@@ -104,6 +105,23 @@ export class TransportControls {
     }
 
     sequenceSection.appendChild(sequenceRow);
+
+    // Mute buttons row (below sequence selector)
+    const muteRow = document.createElement('div');
+    muteRow.className = 'sequence-mute-row';
+
+    this.muteButtons = [];
+    for (let i = 0; i < 4; i++) {
+      const btn = document.createElement('button');
+      btn.className = 'mute-btn';
+      btn.textContent = 'M';
+      btn.title = `Mute Sequence ${i + 1}`;
+      btn.addEventListener('click', () => this.handleMuteToggle(i));
+      muteRow.appendChild(btn);
+      this.muteButtons.push(btn);
+    }
+
+    sequenceSection.appendChild(muteRow);
     this.container.appendChild(sequenceSection);
 
     // MIDI Status/Device section
@@ -275,6 +293,16 @@ export class TransportControls {
 
     // THEN update channel select to show this sequence's channel
     this.updateChannelSelect();
+  }
+
+  /**
+   * Handle mute button click
+   */
+  private handleMuteToggle(index: number): void {
+    const isMuted = this.playbackEngine.toggleMute(index);
+    if (this.muteButtons[index]) {
+      this.muteButtons[index].classList.toggle('muted', isMuted);
+    }
   }
 
   /**

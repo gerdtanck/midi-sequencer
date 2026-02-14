@@ -35,6 +35,9 @@ export class PlaybackEngine {
   // Active sequence for UI display
   private activeIndex = 0;
 
+  // Per-sequence mute state
+  private mutedSequences: boolean[] = [false, false, false, false];
+
   // Per-sequence playback state
   private states: SequenceState[];
 
@@ -70,6 +73,29 @@ export class PlaybackEngine {
    */
   getActiveIndex(): number {
     return this.activeIndex;
+  }
+
+  /**
+   * Toggle mute for a sequence. Returns new mute state.
+   * When muting, sends All Notes Off on that channel to silence held notes.
+   */
+  toggleMute(index: number): boolean {
+    if (index < 0 || index >= this.sequences.length) return false;
+    this.mutedSequences[index] = !this.mutedSequences[index];
+
+    if (this.mutedSequences[index]) {
+      const channel = this.sequences[index].getMidiChannel();
+      this.midiManager.panicChannel(channel);
+    }
+
+    return this.mutedSequences[index];
+  }
+
+  /**
+   * Check if a sequence is muted
+   */
+  isMuted(index: number): boolean {
+    return this.mutedSequences[index] ?? false;
   }
 
   /**
@@ -218,22 +244,24 @@ export class PlaybackEngine {
     const notes = seq.getNotesAt(snappedStep);
     const channel = seq.getMidiChannel();
 
-    // Schedule each note with precise timestamps
-    const noteOnTime = state.nextStepTime;
-    for (const note of notes) {
-      // Duration is relative to full steps, convert to ms
-      const durationMs = this.fullStepDurationMs() * note.duration;
-      const noteOffTime = noteOnTime + durationMs;
+    // Schedule each note with precise timestamps (skip if muted)
+    if (!this.mutedSequences[index]) {
+      const noteOnTime = state.nextStepTime;
+      for (const note of notes) {
+        // Duration is relative to full steps, convert to ms
+        const durationMs = this.fullStepDurationMs() * note.duration;
+        const noteOffTime = noteOnTime + durationMs;
 
-      // Schedule note on with timestamp for precise timing
-      this.scheduler.scheduleEvent(() => {
-        this.midiManager.sendNoteOn(channel, note.pitch, note.velocity, noteOnTime);
-      }, noteOnTime);
+        // Schedule note on with timestamp for precise timing
+        this.scheduler.scheduleEvent(() => {
+          this.midiManager.sendNoteOn(channel, note.pitch, note.velocity, noteOnTime);
+        }, noteOnTime);
 
-      // Schedule note off with timestamp for precise timing
-      this.scheduler.scheduleEvent(() => {
-        this.midiManager.sendNoteOff(channel, note.pitch, noteOffTime);
-      }, noteOffTime);
+        // Schedule note off with timestamp for precise timing
+        this.scheduler.scheduleEvent(() => {
+          this.midiManager.sendNoteOff(channel, note.pitch, noteOffTime);
+        }, noteOffTime);
+      }
     }
 
     // Notify position change for active sequence only (on full steps)

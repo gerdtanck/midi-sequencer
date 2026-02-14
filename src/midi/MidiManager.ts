@@ -243,6 +243,26 @@ export class MidiManager {
   }
 
   /**
+   * Silence all notes on a single MIDI channel
+   */
+  panicChannel(channel: number): void {
+    if (!this._selectedDevice) return;
+
+    // Send Note Off for tracked active notes on this channel
+    const activeNotes = this.noteTracker.getActiveNotes();
+    for (const note of activeNotes) {
+      if (note.channel === channel) {
+        this.sendNoteOff(channel, note.note);
+      }
+    }
+
+    // Send All Notes Off (CC 123) on this channel
+    this._selectedDevice.send([0xb0 + channel, 123, 0]);
+    // Send All Sound Off (CC 120) on this channel
+    this._selectedDevice.send([0xb0 + channel, 120, 0]);
+  }
+
+  /**
    * Get number of currently active notes
    */
   getActiveNoteCount(): number {
