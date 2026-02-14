@@ -422,7 +422,23 @@ export class NoteGrid {
    */
   initBarIndicators(container: HTMLElement): void {
     this.barIndicators = new BarIndicators(container, this.config, this.barCount);
+    this.barIndicators.setCallback((barIndex) => this.zoomToBar(barIndex));
     this.syncOverlayComponents();
+  }
+
+  /**
+   * Zoom the view to a specific bar and set loop markers to that bar
+   */
+  zoomToBar(barIndex: number): void {
+    const startStep = barIndex * this.config.stepsPerBar;
+    const endStep = startStep + this.config.stepsPerBar;
+
+    if (this.sequence) {
+      this.sequence.setLoopMarkers({ start: startStep, end: endStep });
+    }
+
+    this.gridControls.zoomToStepRange(startStep, endStep);
+    this.refreshLoopMarkers();
   }
 
   /**

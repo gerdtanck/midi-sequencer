@@ -462,6 +462,38 @@ export class GridControls implements InputHandler {
   }
 
   /**
+   * Zooms the camera to show exactly the given horizontal step range
+   */
+  zoomToStepRange(leftStep: number, rightStep: number): void {
+    const targetViewWidth = rightStep - leftStep;
+
+    const gridAspect = this.gridWidth / this.gridHeight;
+    const maxViewWidth = this.containerAspect > gridAspect
+      ? this.gridHeight * this.containerAspect
+      : this.gridWidth;
+
+    this.zoomLevel = Math.max(0, Math.min(1,
+      (targetViewWidth - this.minViewWidth) / (maxViewWidth - this.minViewWidth)
+    ));
+
+    this.applyZoom();
+
+    // Center camera on the target range
+    const centerX = (leftStep + rightStep) / 2;
+    const viewWidth = this.camera.right - this.camera.left;
+    const viewHeight = this.camera.top - this.camera.bottom;
+    const centerY = (this.camera.top + this.camera.bottom) / 2;
+
+    this.camera.left = centerX - viewWidth / 2;
+    this.camera.right = centerX + viewWidth / 2;
+    this.camera.top = centerY + viewHeight / 2;
+    this.camera.bottom = centerY - viewHeight / 2;
+
+    this.clampCameraToBounds();
+    this.updateCameraProjection();
+  }
+
+  /**
    * Resets the view to show the entire grid (zoomed out)
    */
   resetView(): void {
