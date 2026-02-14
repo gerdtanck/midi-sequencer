@@ -33,11 +33,17 @@ export class GridControls implements InputHandler {
   private gridWidth = 0;
   private gridHeight = 0;
 
-  // Zoom state
-  private zoomLevel = 1.0;
+  // Zoom state (independent axes)
+  private zoomLevelX = 1.0;
+  private zoomLevelY = 1.0;
   private zoomSpeed = 0.1;
   private minViewWidth = 8; // Half a bar for better mobile targeting
+  private minViewHeight = 6; // Half an octave
   private containerAspect = 1;
+
+  // Axis lock state
+  private lockX = false;
+  private lockY = false;
 
   // Pan state (mouse)
   isPanning = false;
@@ -48,7 +54,8 @@ export class GridControls implements InputHandler {
   private touches = new Map<number, TouchInfo>();
   private gestureType: 'pan' | 'pinch' | null = null;
   private initialPinchDistance = 0;
-  private initialZoomLevel = 0;
+  private initialZoomLevelX = 0;
+  private initialZoomLevelY = 0;
   private pinchCenterWorld = { x: 0, y: 0 };
 
   // Bound event handlers (touch events only - mouse handled via InputHandler)
@@ -108,7 +115,7 @@ export class GridControls implements InputHandler {
   }
 
   /**
-   * Calculates the view width based on current zoom level
+   * Calculates the view width based on current X zoom level
    */
   private calculateViewWidth(): number {
     const gridAspect = this.gridWidth / this.gridHeight;
@@ -120,15 +127,23 @@ export class GridControls implements InputHandler {
       maxViewWidth = this.gridWidth;
     }
 
-    return this.minViewWidth + (maxViewWidth - this.minViewWidth) * this.zoomLevel;
+    return this.minViewWidth + (maxViewWidth - this.minViewWidth) * this.zoomLevelX;
   }
 
   /**
-   * Applies the current zoom level to the camera
+   * Calculates the view height based on current Y zoom level
+   */
+  private calculateViewHeight(): number {
+    const maxViewHeight = this.gridHeight;
+    return this.minViewHeight + (maxViewHeight - this.minViewHeight) * this.zoomLevelY;
+  }
+
+  /**
+   * Applies the current zoom levels to the camera
    */
   private applyZoom(): void {
     const viewWidth = this.calculateViewWidth();
-    const viewHeight = viewWidth / this.containerAspect;
+    const viewHeight = this.calculateViewHeight();
 
     const centerX = (this.camera.left + this.camera.right) / 2;
     const centerY = (this.camera.top + this.camera.bottom) / 2;
@@ -189,34 +204,56 @@ export class GridControls implements InputHandler {
   }
 
   /**
-   * Zooms at a specific world point
+   * Zooms at a specific world point, respecting axis locks
    */
   private zoomAtPoint(worldX: number, worldY: number, delta: number): void {
-    const oldZoomLevel = this.zoomLevel;
-    this.zoomLevel = Math.max(0, Math.min(1, this.zoomLevel - delta * this.zoomSpeed));
+    const oldZoomLevelX = this.zoomLevelX;
+    const oldZoomLevelY = this.zoomLevelY;
 
-    if (this.zoomLevel === oldZoomLevel) return;
+    if (!this.lockX) {
+      this.zoomLevelX = Math.max(0, Math.min(1, this.zoomLevelX - delta * this.zoomSpeed));
+    }
+    if (!this.lockY) {
+      this.zoomLevelY = Math.max(0, Math.min(1, this.zoomLevelY - delta * this.zoomSpeed));
+    }
 
-    const oldViewWidth = this.camera.right - this.camera.left;
-    const oldViewHeight = this.camera.top - this.camera.bottom;
-    const oldCenterX = (this.camera.left + this.camera.right) / 2;
-    const oldCenterY = (this.camera.top + this.camera.bottom) / 2;
+    if (this.zoomLevelX === oldZoomLevelX && this.zoomLevelY === oldZoomLevelY) return;
 
-    const offsetX = (worldX - oldCenterX) / oldViewWidth;
-    const offsetY = (worldY - oldCenterY) / oldViewHeight;
+    const oldLeft = this.camera.left;
+    const oldRight = this.camera.right;
+    const oldTop = this.camera.top;
+    const oldBottom = this.camera.bottom;
+    const oldViewWidth = oldRight - oldLeft;
+    const oldViewHeight = oldTop - oldBottom;
+    const oldCenterX = (oldLeft + oldRight) / 2;
+    const oldCenterY = (oldTop + oldBottom) / 2;
 
     this.applyZoom();
 
-    const newViewWidth = this.camera.right - this.camera.left;
-    const newViewHeight = this.camera.top - this.camera.bottom;
+    // Restore locked axis bounds
+    if (this.lockX) {
+      this.camera.left = oldLeft;
+      this.camera.right = oldRight;
+    } else {
+      // Zoom-toward-cursor for X axis
+      const offsetX = (worldX - oldCenterX) / oldViewWidth;
+      const newViewWidth = this.camera.right - this.camera.left;
+      const newCenterX = worldX - offsetX * newViewWidth;
+      this.camera.left = newCenterX - newViewWidth / 2;
+      this.camera.right = newCenterX + newViewWidth / 2;
+    }
 
-    const newCenterX = worldX - offsetX * newViewWidth;
-    const newCenterY = worldY - offsetY * newViewHeight;
-
-    this.camera.left = newCenterX - newViewWidth / 2;
-    this.camera.right = newCenterX + newViewWidth / 2;
-    this.camera.top = newCenterY + newViewHeight / 2;
-    this.camera.bottom = newCenterY - newViewHeight / 2;
+    if (this.lockY) {
+      this.camera.top = oldTop;
+      this.camera.bottom = oldBottom;
+    } else {
+      // Zoom-toward-cursor for Y axis
+      const offsetY = (worldY - oldCenterY) / oldViewHeight;
+      const newViewHeight = this.camera.top - this.camera.bottom;
+      const newCenterY = worldY - offsetY * newViewHeight;
+      this.camera.top = newCenterY + newViewHeight / 2;
+      this.camera.bottom = newCenterY - newViewHeight / 2;
+    }
 
     this.clampCameraToBounds();
     this.updateCameraProjection();
@@ -279,8 +316,8 @@ export class GridControls implements InputHandler {
     const viewWidth = this.camera.right - this.camera.left;
     const viewHeight = this.camera.top - this.camera.bottom;
 
-    const worldDeltaX = (ndcDeltaX * viewWidth) / 2;
-    const worldDeltaY = (ndcDeltaY * viewHeight) / 2;
+    const worldDeltaX = this.lockX ? 0 : (ndcDeltaX * viewWidth) / 2;
+    const worldDeltaY = this.lockY ? 0 : (ndcDeltaY * viewHeight) / 2;
 
     const newCenterX = this.panStartCameraCenter.x - worldDeltaX;
     const newCenterY = this.panStartCameraCenter.y - worldDeltaY;
@@ -354,7 +391,8 @@ export class GridControls implements InputHandler {
     const dx = t2.currentX - t1.currentX;
     const dy = t2.currentY - t1.currentY;
     this.initialPinchDistance = Math.sqrt(dx * dx + dy * dy);
-    this.initialZoomLevel = this.zoomLevel;
+    this.initialZoomLevelX = this.zoomLevelX;
+    this.initialZoomLevelY = this.zoomLevelY;
 
     const centerX = (t1.currentX + t2.currentX) / 2;
     const centerY = (t1.currentY + t2.currentY) / 2;
@@ -382,8 +420,8 @@ export class GridControls implements InputHandler {
       const viewWidth = this.camera.right - this.camera.left;
       const viewHeight = this.camera.top - this.camera.bottom;
 
-      const worldDeltaX = (ndcDeltaX * viewWidth) / 2;
-      const worldDeltaY = (ndcDeltaY * viewHeight) / 2;
+      const worldDeltaX = this.lockX ? 0 : (ndcDeltaX * viewWidth) / 2;
+      const worldDeltaY = this.lockY ? 0 : (ndcDeltaY * viewHeight) / 2;
 
       const newCenterX = this.panStartCameraCenter.x - worldDeltaX;
       const newCenterY = this.panStartCameraCenter.y - worldDeltaY;
@@ -407,13 +445,30 @@ export class GridControls implements InputHandler {
       const scale = currentDistance / this.initialPinchDistance;
       const logScale = Math.log(scale);
       const pinchZoomSpeed = 0.7;
-      const newZoomLevel = Math.max(
-        0,
-        Math.min(1, this.initialZoomLevel - logScale * pinchZoomSpeed)
-      );
 
-      this.zoomLevel = newZoomLevel;
+      const oldLeft = this.camera.left;
+      const oldRight = this.camera.right;
+      const oldTop = this.camera.top;
+      const oldBottom = this.camera.bottom;
+
+      if (!this.lockX) {
+        this.zoomLevelX = Math.max(0, Math.min(1, this.initialZoomLevelX - logScale * pinchZoomSpeed));
+      }
+      if (!this.lockY) {
+        this.zoomLevelY = Math.max(0, Math.min(1, this.initialZoomLevelY - logScale * pinchZoomSpeed));
+      }
+
       this.applyZoom();
+
+      // Restore locked axis bounds
+      if (this.lockX) {
+        this.camera.left = oldLeft;
+        this.camera.right = oldRight;
+      }
+      if (this.lockY) {
+        this.camera.top = oldTop;
+        this.camera.bottom = oldBottom;
+      }
 
       const viewWidth = this.camera.right - this.camera.left;
       const viewHeight = this.camera.top - this.camera.bottom;
@@ -425,13 +480,16 @@ export class GridControls implements InputHandler {
       const ndcX = ((screenCenterX - rect.left) / rect.width) * 2 - 1;
       const ndcY = -((screenCenterY - rect.top) / rect.height) * 2 + 1;
 
-      const newCenterX = this.pinchCenterWorld.x - (ndcX * viewWidth) / 2;
-      const newCenterY = this.pinchCenterWorld.y - (ndcY * viewHeight) / 2;
-
-      this.camera.left = newCenterX - viewWidth / 2;
-      this.camera.right = newCenterX + viewWidth / 2;
-      this.camera.top = newCenterY + viewHeight / 2;
-      this.camera.bottom = newCenterY - viewHeight / 2;
+      if (!this.lockX) {
+        const newCenterX = this.pinchCenterWorld.x - (ndcX * viewWidth) / 2;
+        this.camera.left = newCenterX - viewWidth / 2;
+        this.camera.right = newCenterX + viewWidth / 2;
+      }
+      if (!this.lockY) {
+        const newCenterY = this.pinchCenterWorld.y - (ndcY * viewHeight) / 2;
+        this.camera.top = newCenterY + viewHeight / 2;
+        this.camera.bottom = newCenterY - viewHeight / 2;
+      }
 
       this.clampCameraToBounds();
       this.updateCameraProjection();
@@ -472,7 +530,7 @@ export class GridControls implements InputHandler {
       ? this.gridHeight * this.containerAspect
       : this.gridWidth;
 
-    this.zoomLevel = Math.max(0, Math.min(1,
+    this.zoomLevelX = Math.max(0, Math.min(1,
       (targetViewWidth - this.minViewWidth) / (maxViewWidth - this.minViewWidth)
     ));
 
@@ -494,10 +552,22 @@ export class GridControls implements InputHandler {
   }
 
   /**
+   * Sets axis lock state for zoom and pan
+   */
+  setAxisLock(axis: 'x' | 'y', locked: boolean): void {
+    if (axis === 'x') {
+      this.lockX = locked;
+    } else {
+      this.lockY = locked;
+    }
+  }
+
+  /**
    * Resets the view to show the entire grid (zoomed out)
    */
   resetView(): void {
-    this.zoomLevel = 1.0;
+    this.zoomLevelX = 1.0;
+    this.zoomLevelY = 1.0;
     this.applyZoom();
 
     const centerX = this.gridWidth / 2;

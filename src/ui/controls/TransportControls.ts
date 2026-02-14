@@ -43,6 +43,8 @@ export class TransportControls {
   private undoButton: HTMLButtonElement | null = null;
   private redoButton: HTMLButtonElement | null = null;
   private fullscreenButton: HTMLButtonElement | null = null;
+  private lockBarsBtn: HTMLButtonElement | null = null;
+  private lockOctavesBtn: HTMLButtonElement | null = null;
 
   constructor(
     container: HTMLElement,
@@ -268,6 +270,30 @@ export class TransportControls {
       document.addEventListener('fullscreenchange', () => this.updateFullscreenButton());
       document.addEventListener('webkitfullscreenchange', () => this.updateFullscreenButton());
     }
+
+    // View lock section
+    const lockSection = document.createElement('div');
+    lockSection.className = 'control-group';
+
+    const lockRow = document.createElement('div');
+    lockRow.className = 'transport-controls';
+
+    this.lockBarsBtn = document.createElement('button');
+    this.lockBarsBtn.className = 'transport-btn lock-btn';
+    this.lockBarsBtn.textContent = 'Lock Bars';
+    this.lockBarsBtn.title = 'Lock horizontal zoom/pan';
+    this.lockBarsBtn.addEventListener('click', () => this.toggleLock('x'));
+    lockRow.appendChild(this.lockBarsBtn);
+
+    this.lockOctavesBtn = document.createElement('button');
+    this.lockOctavesBtn.className = 'transport-btn lock-btn';
+    this.lockOctavesBtn.textContent = 'Lock Keys';
+    this.lockOctavesBtn.title = 'Lock vertical zoom/pan';
+    this.lockOctavesBtn.addEventListener('click', () => this.toggleLock('y'));
+    lockRow.appendChild(this.lockOctavesBtn);
+
+    lockSection.appendChild(lockRow);
+    this.container.appendChild(lockSection);
 
     // Disable playback controls until MIDI is enabled
     this.setControlsEnabled(false);
@@ -577,6 +603,17 @@ export class TransportControls {
         (elem as any).webkitRequestFullscreen();
       }
     }
+  }
+
+  /**
+   * Toggle axis lock and update button state
+   */
+  private toggleLock(axis: 'x' | 'y'): void {
+    const btn = axis === 'x' ? this.lockBarsBtn : this.lockOctavesBtn;
+    if (!btn) return;
+
+    const isActive = btn.classList.toggle('active');
+    this.noteGrid?.setAxisLock(axis, isActive);
   }
 
   /**

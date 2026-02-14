@@ -220,6 +220,16 @@ body {
   filter: brightness(1.1);
 }
 
+.lock-btn.active {
+  background-color: var(--control-accent);
+  border-color: var(--control-accent);
+  color: white;
+}
+
+.lock-btn.active:hover {
+  filter: brightness(1.1);
+}
+
 .transport-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;

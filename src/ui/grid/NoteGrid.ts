@@ -442,6 +442,13 @@ export class NoteGrid {
   }
 
   /**
+   * Sets axis lock state for zoom and pan
+   */
+  setAxisLock(axis: 'x' | 'y', locked: boolean): void {
+    this.gridControls.setAxisLock(axis, locked);
+  }
+
+  /**
    * Set the scale manager for scale-aware features
    */
   setScaleManager(scaleManager: ScaleManager): void {
