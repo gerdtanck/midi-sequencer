@@ -45,6 +45,8 @@ export class TransportControls {
   private fullscreenButton: HTMLButtonElement | null = null;
   private lockBarsBtn: HTMLButtonElement | null = null;
   private lockOctavesBtn: HTMLButtonElement | null = null;
+  private ccToggleBtn: HTMLButtonElement | null = null;
+  private ccSelectBtn: HTMLButtonElement | null = null;
 
   constructor(
     container: HTMLElement,
@@ -198,9 +200,7 @@ export class TransportControls {
     bpmSection.appendChild(bpmRow);
     this.container.appendChild(bpmSection);
 
-    // MIDI Channel section
-    const channelSection = document.createElement('div');
-    channelSection.className = 'control-group';
+    // MIDI Channel 
 
     const channelRow = document.createElement('div');
     channelRow.className = 'channel-control';
@@ -221,8 +221,7 @@ export class TransportControls {
     channelHint.textContent = 'Ch';
     channelRow.appendChild(channelHint);
 
-    channelSection.appendChild(channelRow);
-    this.container.appendChild(channelSection);
+    bpmRow.appendChild(channelRow);
 
     // Update channel select to show active sequence's channel
     this.updateChannelSelect();
@@ -291,6 +290,21 @@ export class TransportControls {
     this.lockOctavesBtn.title = 'Lock vertical zoom/pan';
     this.lockOctavesBtn.addEventListener('click', () => this.toggleLock('y'));
     lockRow.appendChild(this.lockOctavesBtn);
+
+    this.ccToggleBtn = document.createElement('button');
+    this.ccToggleBtn.className = 'transport-btn lock-btn';
+    this.ccToggleBtn.textContent = 'CC';
+    this.ccToggleBtn.title = 'Toggle CC event input mode';
+    this.ccToggleBtn.addEventListener('click', () => this.toggleCCMode());
+    lockRow.appendChild(this.ccToggleBtn);
+
+    this.ccSelectBtn = document.createElement('button');
+    this.ccSelectBtn.className = 'transport-btn lock-btn';
+    this.ccSelectBtn.textContent = '74';
+    this.ccSelectBtn.title = 'Select CC controller number';
+    this.ccSelectBtn.style.fontSize = '0.7rem';
+    this.ccSelectBtn.addEventListener('click', () => this.showCCSelector());
+    lockRow.appendChild(this.ccSelectBtn);
 
     lockSection.appendChild(lockRow);
     this.container.appendChild(lockSection);
@@ -614,6 +628,78 @@ export class TransportControls {
 
     const isActive = btn.classList.toggle('active');
     this.noteGrid?.setAxisLock(axis, isActive);
+  }
+
+  /**
+   * Toggle CC input mode
+   */
+  private toggleCCMode(): void {
+    if (!this.ccToggleBtn || !this.noteGrid) return;
+    const isActive = this.ccToggleBtn.classList.toggle('active');
+    this.noteGrid.setCCMode(isActive);
+  }
+
+  /**
+   * Show CC controller number selector popup
+   */
+  private showCCSelector(): void {
+    if (!this.noteGrid || !this.ccSelectBtn) return;
+
+    // Remove existing popup
+    const existing = document.querySelector('.cc-selector-popup');
+    if (existing) { existing.remove(); return; }
+
+    const COMMON_CCS = [
+      { num: 1, name: 'Mod Wheel' },
+      { num: 7, name: 'Volume' },
+      { num: 10, name: 'Pan' },
+      { num: 11, name: 'Expression' },
+      { num: 64, name: 'Sustain' },
+      { num: 71, name: 'Resonance' },
+      { num: 74, name: 'Cutoff' },
+      { num: 91, name: 'Reverb' },
+      { num: 93, name: 'Chorus' },
+    ];
+
+    const popup = document.createElement('div');
+    popup.className = 'cc-selector-popup';
+    popup.style.cssText = `
+      position: fixed; background: #1a1a2e; border: 1px solid #555;
+      border-radius: 4px; padding: 6px; z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex;
+      flex-direction: column; gap: 2px; font-size: 0.8rem;
+    `;
+
+    const rect = this.ccSelectBtn.getBoundingClientRect();
+    popup.style.left = `${rect.left}px`;
+    popup.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+
+    for (const cc of COMMON_CCS) {
+      const item = document.createElement('button');
+      item.style.cssText = `
+        background: transparent; border: none; color: #ccc; padding: 4px 8px;
+        cursor: pointer; text-align: left; border-radius: 3px; white-space: nowrap;
+      `;
+      item.textContent = `${cc.num}: ${cc.name}`;
+      item.addEventListener('mouseenter', () => { item.style.background = '#333'; });
+      item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+      item.addEventListener('click', () => {
+        this.noteGrid?.setCCController(cc.num);
+        if (this.ccSelectBtn) this.ccSelectBtn.textContent = String(cc.num);
+        popup.remove();
+      });
+      popup.appendChild(item);
+    }
+
+    document.body.appendChild(popup);
+
+    const closeHandler = (e: MouseEvent) => {
+      if (!popup.contains(e.target as Node) && e.target !== this.ccSelectBtn) {
+        popup.remove();
+        document.removeEventListener('mousedown', closeHandler);
+      }
+    };
+    requestAnimationFrame(() => document.addEventListener('mousedown', closeHandler));
   }
 
   /**

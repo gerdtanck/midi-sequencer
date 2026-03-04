@@ -89,14 +89,14 @@ export class ScaleSelector {
     this.snapToggle.addEventListener('change', () => this.onSnapChange());
 
     const snapText = document.createElement('span');
-    snapText.textContent = 'Snap to scale';
+    snapText.textContent = 'Snap';
 
     snapLabel.appendChild(this.snapToggle);
     snapLabel.appendChild(snapText);
     snapRow.appendChild(snapLabel);
 
-    scaleSection.appendChild(snapRow);
-
+    controlsRow.appendChild(snapRow);
+ 
     this.container.appendChild(scaleSection);
 
     // Update UI when scale manager changes

@@ -204,6 +204,19 @@ export class MidiManager {
   }
 
   /**
+   * Send MIDI Control Change message
+   */
+  sendCC(channel: number, controller: number, value: number, timestamp?: number): void {
+    if (!this._selectedDevice) {
+      return;
+    }
+
+    const message = [0xb0 + channel, controller, value];
+    const time = timestamp ?? performance.now();
+    this._selectedDevice.send(message, { time });
+  }
+
+  /**
    * Emergency stop: silence all MIDI output immediately
    *
    * Three-layer panic:

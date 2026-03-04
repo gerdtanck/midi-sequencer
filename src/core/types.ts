@@ -10,6 +10,8 @@ export interface Note {
   duration: number;
   /** Original pitch where note was placed (used for scale quantization) */
   originalPitch?: number;
+  /** If present, this is a CC automation event instead of a note */
+  cc?: { controller: number; value: number };
 }
 
 /**

@@ -634,6 +634,7 @@ body {
   color: var(--control-text);
   cursor: pointer;
   outline: none;
+  width: 120px;
 }
 
 .root-select {
@@ -656,7 +657,7 @@ body {
 }
 
 .snap-row {
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .snap-label {

@@ -46,6 +46,7 @@ export type NoteVelocityCallback = (
   notes: Array<{ step: number; pitch: number; oldVelocity: number }>,
   deltaVelocity: number
 ) => void;
+export type CtrlEditFeedbackCallback = (screenX: number, screenY: number, value: number, isCC: boolean, step: number, pitch: number) => void;
 
 /**
  * Interaction modes
@@ -108,7 +109,7 @@ export class NoteInteractionController {
   private resizeStartWorldX = 0;
 
   // Ctrl-edit state (velocity + length editing)
-  private ctrlEditNotes: Array<{ step: number; pitch: number; startVelocity: number; startDuration: number }> = [];
+  private ctrlEditNotes: Array<{ step: number; pitch: number; startVelocity: number; startDuration: number; isCC: boolean }> = [];
   private ctrlEditStartY = 0;
   private ctrlEditStartX = 0;
 
@@ -147,6 +148,7 @@ export class NoteInteractionController {
   private onNotePaste: NotePasteCallback | null = null;
   private onNoteAudition: NoteAuditionCallback | null = null;
   private onNoteVelocity: NoteVelocityCallback | null = null;
+  private onCtrlEditFeedback: CtrlEditFeedbackCallback | null = null;
   private onRenderRequest: (() => void) | null = null;
   private onCancelPan: (() => void) | null = null;
 
@@ -217,6 +219,10 @@ export class NoteInteractionController {
 
   setNoteVelocityCallback(callback: NoteVelocityCallback): void {
     this.onNoteVelocity = callback;
+  }
+
+  setCtrlEditFeedbackCallback(callback: CtrlEditFeedbackCallback): void {
+    this.onCtrlEditFeedback = callback;
   }
 
   setRenderCallback(callback: () => void): void {
@@ -335,7 +341,7 @@ export class NoteInteractionController {
   private handlePCPointerDown(
     e: MouseEvent | TouchEvent,
     world: { x: number; y: number },
-    noteAtPos: { step: number; pitch: number; duration: number; velocity: number; isNearHandle: boolean } | null
+    noteAtPos: { step: number; pitch: number; duration: number; velocity: number; isNearHandle: boolean; isCC: boolean } | null
   ): void {
     if (noteAtPos) {
       if (noteAtPos.isNearHandle) {
@@ -365,6 +371,7 @@ export class NoteInteractionController {
               pitch: n.pitch,
               startVelocity: noteData?.velocity ?? 100,
               startDuration: noteData?.duration ?? 0.8,
+              isCC: noteData?.isCC ?? false,
             };
           });
         } else {
@@ -373,6 +380,7 @@ export class NoteInteractionController {
             pitch: noteAtPos.pitch,
             startVelocity: noteAtPos.velocity,
             startDuration: noteAtPos.duration,
+            isCC: noteAtPos.isCC,
           }];
         }
         e.stopPropagation();
@@ -413,7 +421,7 @@ export class NoteInteractionController {
     _e: MouseEvent | TouchEvent,
     pos: { x: number; y: number },
     world: { x: number; y: number },
-    noteAtPos: { step: number; pitch: number; duration: number; velocity: number; isNearHandle: boolean } | null
+    noteAtPos: { step: number; pitch: number; duration: number; velocity: number; isNearHandle: boolean; isCC: boolean } | null
   ): void {
     // Check for double-tap
     const now = Date.now();
@@ -473,7 +481,7 @@ export class NoteInteractionController {
   // ============ Long Press Handlers ============
 
   private handleLongPressOnNote(
-    noteAtPos: { step: number; pitch: number; duration: number; velocity: number }
+    noteAtPos: { step: number; pitch: number; duration: number; velocity: number; isCC: boolean }
   ): void {
     if (this.pointerMoved) return;
 
@@ -496,6 +504,7 @@ export class NoteInteractionController {
           pitch: n.pitch,
           startVelocity: noteData?.velocity ?? 100,
           startDuration: noteData?.duration ?? 0.8,
+          isCC: noteData?.isCC ?? false,
         };
       });
     } else {
@@ -504,6 +513,7 @@ export class NoteInteractionController {
         pitch: noteAtPos.pitch,
         startVelocity: noteAtPos.velocity,
         startDuration: noteAtPos.duration,
+        isCC: noteAtPos.isCC,
       }];
     }
     this.dragNotes = [];
@@ -791,6 +801,8 @@ export class NoteInteractionController {
 
     // Update visual for each note
     if (this.noteRenderer) {
+      let feedbackValue = 0;
+      let feedbackIsCC = false;
       for (const note of this.ctrlEditNotes) {
         // Update velocity visual
         const newVelocity = Math.max(
@@ -805,8 +817,18 @@ export class NoteInteractionController {
           Math.min(MAX_NOTE_DURATION, note.startDuration + deltaDuration)
         );
         this.noteRenderer.updateNoteMesh(note.step, note.pitch, newDuration);
+
+        // Track for feedback (use first note's values)
+        feedbackValue = newVelocity;
+        feedbackIsCC = note.isCC;
       }
       this.onRenderRequest?.();
+
+      // Fire feedback callback for tooltip and live audition
+      if (this.onCtrlEditFeedback && this.ctrlEditNotes.length > 0) {
+        const first = this.ctrlEditNotes[0];
+        this.onCtrlEditFeedback(pos.x, pos.y, feedbackValue, feedbackIsCC, first.step, first.pitch);
+      }
     }
   }
 
@@ -894,6 +916,9 @@ export class NoteInteractionController {
         this.onNoteResize(note.step, note.pitch, newDuration);
       }
     }
+
+    // Hide feedback tooltip
+    this.onCtrlEditFeedback?.(0, 0, -1, false, 0, 0);
 
     this.domElement.style.cursor = 'pointer';
   }

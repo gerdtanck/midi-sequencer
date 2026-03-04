@@ -57,7 +57,9 @@ export const PIXELS_PER_VELOCITY = 2;          // Pixels of drag per velocity un
 
 // Note colors (hex)
 export const NOTE_COLOR = 0xe94560;            // Default note color (red/pink)
-export const NOTE_SELECTED_COLOR = 0x4a9eff;   // Selected note color (blue)
+export const CC_NOTE_COLOR = 0x4a9eff;         // CC event color (blue)
+export const NOTE_SELECTED_COLOR = 0xff6b8a;   // Selected note color (lighter pink)
+export const CC_NOTE_SELECTED_COLOR = 0x7bbfff; // Selected CC event color (lighter blue)
 export const HANDLE_COLOR = 0xffffff;          // Resize handle color (white)
 
 // Z-positions (layering order)

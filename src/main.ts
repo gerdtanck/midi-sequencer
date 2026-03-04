@@ -126,6 +126,12 @@ function initApp(): void {
     }
   });
 
+  // Wire live CC audition (send CC during value editing)
+  noteGrid.setCCAuditionCallback((controller: number, value: number) => {
+    const channel = sequenceManager?.getActiveSequence().getMidiChannel() ?? 0;
+    midiManager?.sendCC(channel, controller, value);
+  });
+
   // Initialize transport controls
   if (transportContainer) {
     transportControls = new TransportControls(transportContainer, playbackEngine, midiManager);

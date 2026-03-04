@@ -14,6 +14,7 @@ export class AddNoteCommand implements Command {
   private velocity: number;
   private duration: number;
   private originalPitch: number;
+  private cc?: { controller: number; value: number };
 
   constructor(
     sequence: Sequence,
@@ -21,7 +22,8 @@ export class AddNoteCommand implements Command {
     pitch: number,
     velocity: number,
     duration: number,
-    originalPitch?: number
+    originalPitch?: number,
+    cc?: { controller: number; value: number }
   ) {
     this.sequence = sequence;
     this.step = step;
@@ -29,11 +31,14 @@ export class AddNoteCommand implements Command {
     this.velocity = velocity;
     this.duration = duration;
     this.originalPitch = originalPitch ?? pitch; // Default to pitch if not specified
-    this.description = `Add note at step ${step}`;
+    this.cc = cc;
+    this.description = cc
+      ? `Add CC ${cc.controller} at step ${step}`
+      : `Add note at step ${step}`;
   }
 
   execute(): void {
-    this.sequence.addNote(this.step, this.pitch, this.velocity, this.duration, this.originalPitch);
+    this.sequence.addNote(this.step, this.pitch, this.velocity, this.duration, this.originalPitch, this.cc);
   }
 
   undo(): void {
@@ -53,6 +58,7 @@ export class RemoveNoteCommand implements Command {
   private velocity: number;
   private duration: number;
   private originalPitch: number;
+  private cc?: { controller: number; value: number };
 
   constructor(sequence: Sequence, step: number, pitch: number, note: Note) {
     this.sequence = sequence;
@@ -61,7 +67,10 @@ export class RemoveNoteCommand implements Command {
     this.velocity = note.velocity;
     this.duration = note.duration;
     this.originalPitch = note.originalPitch ?? pitch;
-    this.description = `Remove note at step ${step}`;
+    this.cc = note.cc ? { ...note.cc } : undefined;
+    this.description = note.cc
+      ? `Remove CC ${note.cc.controller} at step ${step}`
+      : `Remove note at step ${step}`;
   }
 
   execute(): void {
@@ -69,6 +78,6 @@ export class RemoveNoteCommand implements Command {
   }
 
   undo(): void {
-    this.sequence.addNote(this.step, this.pitch, this.velocity, this.duration, this.originalPitch);
+    this.sequence.addNote(this.step, this.pitch, this.velocity, this.duration, this.originalPitch, this.cc);
   }
 }

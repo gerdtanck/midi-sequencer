@@ -25,6 +25,7 @@ export class MoveNotesCommand implements Command {
     oldOriginalPitch: number;
     oldVelocity: number;
     oldDuration: number;
+    oldCC?: { controller: number; value: number };
     newStep: number;
     newPitch: number;
     newOriginalPitch: number;
@@ -72,13 +73,14 @@ export class MoveNotesCommand implements Command {
 
       const newStep = snapToSubstep(step + this.deltaStep);
 
-      // Store complete state including velocity and duration
+      // Store complete state including velocity, duration, and CC
       this.movedNotes.push({
         oldStep: step,
         oldPitch: pitch,
         oldOriginalPitch,
         oldVelocity: note.velocity,
         oldDuration: note.duration,
+        oldCC: note.cc ? { ...note.cc } : undefined,
         newStep,
         newPitch,
         newOriginalPitch,
@@ -95,7 +97,8 @@ export class MoveNotesCommand implements Command {
         moved.newPitch,
         moved.oldVelocity,
         moved.oldDuration,
-        moved.newOriginalPitch
+        moved.newOriginalPitch,
+        moved.oldCC
       );
 
       // Update selection
@@ -116,7 +119,8 @@ export class MoveNotesCommand implements Command {
         moved.oldPitch,
         moved.oldVelocity,
         moved.oldDuration,
-        moved.oldOriginalPitch
+        moved.oldOriginalPitch,
+        moved.oldCC
       );
 
       // Update selection back

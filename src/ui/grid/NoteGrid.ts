@@ -66,6 +66,14 @@ export class NoteGrid {
   // Note audition callback (for playing notes on create/paste)
   private onNoteAudition: ((pitches: number[]) => void) | null = null;
 
+  // CC audition callback (for live CC preview during value editing)
+  private onCCAudition: ((controller: number, value: number) => void) | null = null;
+
+  // CC mode state
+  private ccMode: boolean = false;
+  private ccController: number = 74; // Default: Cutoff
+  private ccValue: number = 64; // Default CC value
+
   // Input manager for unified event handling
   private inputManager: InputManager;
 
@@ -74,6 +82,11 @@ export class NoteGrid {
 
   // Render flag - only render when needed
   private needsRender = true;
+
+  // CC tooltip element
+  private ccTooltip: HTMLElement | null = null;
+  private boundOnMouseMove: ((e: MouseEvent) => void) | null = null;
+  private ccEditActive: boolean = false;
 
   constructor(container: HTMLElement, options: Partial<GridConfig> = {}) {
     this.container = container;
@@ -192,6 +205,31 @@ export class NoteGrid {
       this.gridControls.cancelPan();
     });
 
+    // Wire up ctrl-edit feedback for CC tooltip during value adjustment
+    this.noteInteraction.setCtrlEditFeedbackCallback((screenX, screenY, value, isCC, step, pitch) => {
+      if (!this.ccTooltip) return;
+      if (value < 0) {
+        // Hide signal
+        this.ccTooltip.style.display = 'none';
+        this.ccEditActive = false;
+        return;
+      }
+      this.ccEditActive = true;
+      const label = isCC ? 'CC value' : 'Velocity';
+      this.ccTooltip.textContent = `${label}: ${value}`;
+      this.ccTooltip.style.display = 'block';
+      this.ccTooltip.style.left = `${screenX + 12}px`;
+      this.ccTooltip.style.top = `${screenY - 8}px`;
+
+      // Live CC audition: send CC value via MIDI during drag
+      if (isCC && this.onCCAudition && this.sequence) {
+        const note = this.sequence.getNoteAt(step, pitch);
+        if (note?.cc) {
+          this.onCCAudition(note.cc.controller, value);
+        }
+      }
+    });
+
     // Subscribe to sequence changes for re-rendering
     sequence.onChange(() => {
       this.forceRender();
@@ -204,6 +242,9 @@ export class NoteGrid {
       sequence
     );
     this.loopMarkers.updateTransform(this.getCameraState());
+
+    // Set up CC tooltip for hover
+    this.initCCTooltip();
   }
 
   /**
@@ -261,8 +302,8 @@ export class NoteGrid {
   private onNoteToggle(cell: GridCell): void {
     if (!this.sequence) return;
 
-    // When snap is enabled, reject input on out-of-scale rows
-    if (this.scaleManager?.snapEnabled && !this.scaleManager.isChromatic()) {
+    // When snap is enabled and not in CC mode, reject input on out-of-scale rows
+    if (!this.ccMode && this.scaleManager?.snapEnabled && !this.scaleManager.isChromatic()) {
       if (!this.scaleManager.isInScale(cell.pitch)) {
         // Out-of-scale row - ignore input
         return;
@@ -272,7 +313,7 @@ export class NoteGrid {
     const existingNote = this.sequence.getNoteAt(cell.step, cell.pitch);
 
     if (existingNote) {
-      // Remove existing note
+      // Remove existing note/CC event
       const command = new RemoveNoteCommand(this.sequence, cell.step, cell.pitch, existingNote);
       this.commandHistory.execute(command);
 
@@ -280,6 +321,18 @@ export class NoteGrid {
       if (this.selectionManager) {
         this.selectionManager.deselect(cell.step, cell.pitch);
       }
+    } else if (this.ccMode) {
+      // Add new CC event
+      const command = new AddNoteCommand(
+        this.sequence,
+        cell.step,
+        cell.pitch,
+        this.ccValue, // velocity stores the CC value for brightness
+        DEFAULT_NOTE_DURATION,
+        cell.pitch,
+        { controller: this.ccController, value: this.ccValue }
+      );
+      this.commandHistory.execute(command);
     } else {
       // Add new note
       const command = new AddNoteCommand(
@@ -418,12 +471,97 @@ export class NoteGrid {
   }
 
   /**
+   * Set callback for live CC audition during value editing
+   * Called with (controller, value) during Ctrl+drag on CC events
+   */
+  setCCAuditionCallback(callback: (controller: number, value: number) => void): void {
+    this.onCCAudition = callback;
+  }
+
+  /**
    * Initialize bar indicators overlay
    */
   initBarIndicators(container: HTMLElement): void {
     this.barIndicators = new BarIndicators(container, this.config, this.barCount);
     this.barIndicators.setCallback((barIndex) => this.zoomToBar(barIndex));
     this.syncOverlayComponents();
+  }
+
+  /**
+   * Set CC input mode on/off
+   */
+  setCCMode(enabled: boolean): void {
+    this.ccMode = enabled;
+  }
+
+  /**
+   * Get whether CC mode is active
+   */
+  isCCMode(): boolean {
+    return this.ccMode;
+  }
+
+  /**
+   * Set the CC controller number for new CC events
+   */
+  setCCController(controller: number): void {
+    this.ccController = controller;
+  }
+
+  /**
+   * Get the current CC controller number
+   */
+  getCCController(): number {
+    return this.ccController;
+  }
+
+  /**
+   * Initialize CC tooltip for hovering over CC events
+   */
+  private initCCTooltip(): void {
+    this.ccTooltip = document.createElement('div');
+    this.ccTooltip.style.cssText =
+      'position:fixed;padding:2px 6px;background:#1a1a2e;color:#ccc;' +
+      'font-size:11px;border-radius:3px;pointer-events:none;z-index:100;' +
+      'border:1px solid #555;display:none;white-space:nowrap;';
+    document.body.appendChild(this.ccTooltip);
+
+    this.boundOnMouseMove = (e: MouseEvent) => {
+      if (!this.noteRenderer || !this.ccTooltip) return;
+
+      // Don't override tooltip during active ctrl-edit
+      if (this.ccEditActive) return;
+
+      const rect = this.renderer.domElement.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      // Convert screen to world
+      const ndcX = (x / rect.width) * 2 - 1;
+      const ndcY = -(y / rect.height) * 2 + 1;
+      const worldX = this.camera.left + (ndcX - (-1)) / 2 * (this.camera.right - this.camera.left);
+      const worldY = this.camera.bottom + (ndcY - (-1)) / 2 * (this.camera.top - this.camera.bottom);
+
+      const noteAtPos = this.noteRenderer.getNoteAtWorld(worldX, worldY, 0);
+
+      if (noteAtPos?.isCC) {
+        const note = this.sequence?.getNoteAt(noteAtPos.step, noteAtPos.pitch);
+        if (note?.cc) {
+          this.ccTooltip.textContent = `CC ${note.cc.controller}: ${note.cc.value}`;
+          this.ccTooltip.style.display = 'block';
+          this.ccTooltip.style.left = `${e.clientX + 12}px`;
+          this.ccTooltip.style.top = `${e.clientY - 8}px`;
+          return;
+        }
+      }
+
+      this.ccTooltip.style.display = 'none';
+    };
+
+    this.renderer.domElement.addEventListener('mousemove', this.boundOnMouseMove);
+    this.renderer.domElement.addEventListener('mouseleave', () => {
+      if (this.ccTooltip) this.ccTooltip.style.display = 'none';
+    });
   }
 
   /**
@@ -879,6 +1017,13 @@ export class NoteGrid {
 
     if (this.loopMarkers) {
       this.loopMarkers.dispose();
+    }
+
+    if (this.ccTooltip) {
+      this.ccTooltip.remove();
+    }
+    if (this.boundOnMouseMove) {
+      this.renderer.domElement.removeEventListener('mousemove', this.boundOnMouseMove);
     }
 
     this.inputManager.dispose();

@@ -248,19 +248,24 @@ export class PlaybackEngine {
     if (!this.mutedSequences[index]) {
       const noteOnTime = state.nextStepTime;
       for (const note of notes) {
-        // Duration is relative to full steps, convert to ms
-        const durationMs = this.fullStepDurationMs() * note.duration;
-        const noteOffTime = noteOnTime + durationMs;
+        if (note.cc) {
+          // CC automation event - send CC message
+          this.scheduler.scheduleEvent(() => {
+            this.midiManager.sendCC(channel, note.cc!.controller, note.cc!.value, noteOnTime);
+          }, noteOnTime);
+        } else {
+          // Regular note - send note on/off
+          const durationMs = this.fullStepDurationMs() * note.duration;
+          const noteOffTime = noteOnTime + durationMs;
 
-        // Schedule note on with timestamp for precise timing
-        this.scheduler.scheduleEvent(() => {
-          this.midiManager.sendNoteOn(channel, note.pitch, note.velocity, noteOnTime);
-        }, noteOnTime);
+          this.scheduler.scheduleEvent(() => {
+            this.midiManager.sendNoteOn(channel, note.pitch, note.velocity, noteOnTime);
+          }, noteOnTime);
 
-        // Schedule note off with timestamp for precise timing
-        this.scheduler.scheduleEvent(() => {
-          this.midiManager.sendNoteOff(channel, note.pitch, noteOffTime);
-        }, noteOffTime);
+          this.scheduler.scheduleEvent(() => {
+            this.midiManager.sendNoteOff(channel, note.pitch, noteOffTime);
+          }, noteOffTime);
+        }
       }
     }
 
