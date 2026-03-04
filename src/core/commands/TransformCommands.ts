@@ -204,6 +204,7 @@ export class NudgeNotesCommand implements Command {
     velocity: number;
     duration: number;
     originalPitch: number;
+    cc?: { controller: number; value: number };
     newStep: number;
   }> = [];
 
@@ -254,6 +255,7 @@ export class NudgeNotesCommand implements Command {
         velocity: note.velocity,
         duration: note.duration,
         originalPitch: note.originalPitch ?? pitch,
+        cc: note.cc ? { ...note.cc } : undefined,
         newStep,
       });
     }
@@ -270,7 +272,8 @@ export class NudgeNotesCommand implements Command {
         moved.pitch,
         moved.velocity,
         moved.duration,
-        moved.originalPitch
+        moved.originalPitch,
+        moved.cc
       );
 
       // Update selection
@@ -293,7 +296,8 @@ export class NudgeNotesCommand implements Command {
         moved.pitch,
         moved.velocity,
         moved.duration,
-        moved.originalPitch
+        moved.originalPitch,
+        moved.cc
       );
 
       // Update selection back
@@ -324,6 +328,7 @@ export class TransposeNotesCommand implements Command {
     duration: number;
     oldOriginalPitch: number;
     newOriginalPitch: number;
+    cc?: { controller: number; value: number };
   }> = [];
 
   constructor(
@@ -372,6 +377,7 @@ export class TransposeNotesCommand implements Command {
         duration: note.duration,
         oldOriginalPitch,
         newOriginalPitch: Math.max(0, Math.min(127, newOriginalPitch)),
+        cc: note.cc ? { ...note.cc } : undefined,
       });
     }
 
@@ -387,7 +393,8 @@ export class TransposeNotesCommand implements Command {
         moved.newPitch,
         moved.velocity,
         moved.duration,
-        moved.newOriginalPitch
+        moved.newOriginalPitch,
+        moved.cc
       );
 
       // Update selection
@@ -410,7 +417,8 @@ export class TransposeNotesCommand implements Command {
         moved.oldPitch,
         moved.velocity,
         moved.duration,
-        moved.oldOriginalPitch
+        moved.oldOriginalPitch,
+        moved.cc
       );
 
       // Update selection back
@@ -438,6 +446,7 @@ export class ReverseNotesCommand implements Command {
     velocity: number;
     duration: number;
     originalPitch: number;
+    cc?: { controller: number; value: number };
   }> = [];
 
   constructor(
@@ -487,6 +496,7 @@ export class ReverseNotesCommand implements Command {
         velocity: note.velocity,
         duration: note.duration,
         originalPitch: note.originalPitch ?? pitch,
+        cc: note.cc ? { ...note.cc } : undefined,
       });
     }
 
@@ -502,7 +512,8 @@ export class ReverseNotesCommand implements Command {
         moved.pitch,
         moved.velocity,
         moved.duration,
-        moved.originalPitch
+        moved.originalPitch,
+        moved.cc
       );
 
       // Update selection
@@ -525,7 +536,8 @@ export class ReverseNotesCommand implements Command {
         moved.pitch,
         moved.velocity,
         moved.duration,
-        moved.originalPitch
+        moved.originalPitch,
+        moved.cc
       );
 
       // Update selection back
@@ -559,6 +571,7 @@ export class RandomizeCommand implements Command {
     velocity: number;
     duration: number;
     originalPitch: number;
+    cc?: { controller: number; value: number };
     newStep?: number;
     newPitch?: number;
     newVelocity?: number;
@@ -629,6 +642,7 @@ export class RandomizeCommand implements Command {
         velocity: note.velocity,
         duration: note.duration,
         originalPitch: note.originalPitch ?? pitch,
+        cc: note.cc ? { ...note.cc } : undefined,
       };
 
       if (this.property === 'velocity') {
@@ -768,7 +782,8 @@ export class RandomizeCommand implements Command {
           entry.pitch,
           entry.velocity,
           entry.duration,
-          entry.originalPitch
+          entry.originalPitch,
+          entry.cc
         );
         // Update selection
         if (this.selectionManager?.isSelected(entry.step, entry.pitch)) {
@@ -787,7 +802,8 @@ export class RandomizeCommand implements Command {
           newPitch,
           entry.velocity,
           entry.duration,
-          newPitch // new originalPitch matches new pitch
+          newPitch, // new originalPitch matches new pitch
+          entry.cc
         );
         // Update selection
         if (this.selectionManager?.isSelected(entry.step, entry.pitch)) {
@@ -807,7 +823,8 @@ export class RandomizeCommand implements Command {
           newPitch,
           entry.velocity,
           entry.duration,
-          newOriginalPitch
+          newOriginalPitch,
+          entry.cc
         );
         // Update selection
         if (this.selectionManager?.isSelected(entry.step, entry.pitch)) {
@@ -839,7 +856,8 @@ export class RandomizeCommand implements Command {
           entry.pitch,
           entry.velocity,
           entry.duration,
-          entry.originalPitch
+          entry.originalPitch,
+          entry.cc
         );
         // Update selection back
         const newStep = entry.newStep ?? entry.step;
@@ -860,7 +878,8 @@ export class RandomizeCommand implements Command {
           entry.pitch,
           entry.velocity,
           entry.duration,
-          entry.originalPitch
+          entry.originalPitch,
+          entry.cc
         );
         // Update selection back
         const newPitch = entry.newPitch ?? entry.pitch;
@@ -889,6 +908,7 @@ export class QuantizeCommand implements Command {
     velocity: number;
     duration: number;
     originalPitch: number;
+    cc?: { controller: number; value: number };
   }> = [];
 
   constructor(
@@ -921,6 +941,7 @@ export class QuantizeCommand implements Command {
           velocity: note.velocity,
           duration: note.duration,
           originalPitch: note.originalPitch ?? pitch,
+          cc: note.cc ? { ...note.cc } : undefined,
         });
       }
     }
@@ -939,7 +960,8 @@ export class QuantizeCommand implements Command {
         moved.pitch,
         moved.velocity,
         moved.duration,
-        moved.originalPitch
+        moved.originalPitch,
+        moved.cc
       );
 
       // Update selection
@@ -964,7 +986,8 @@ export class QuantizeCommand implements Command {
         moved.pitch,
         moved.velocity,
         moved.duration,
-        moved.originalPitch
+        moved.originalPitch,
+        moved.cc
       );
 
       // Update selection back
@@ -991,6 +1014,7 @@ export class ClearSequenceCommand implements Command {
     velocity: number;
     duration: number;
     originalPitch: number;
+    cc?: { controller: number; value: number };
   }> = [];
 
   constructor(
@@ -1018,6 +1042,7 @@ export class ClearSequenceCommand implements Command {
         velocity: note.velocity,
         duration: note.duration,
         originalPitch: note.originalPitch ?? pitch,
+        cc: note.cc ? { ...note.cc } : undefined,
       });
 
       this.sequence.removeNote(step, pitch);
@@ -1037,7 +1062,8 @@ export class ClearSequenceCommand implements Command {
         note.pitch,
         note.velocity,
         note.duration,
-        note.originalPitch
+        note.originalPitch,
+        note.cc
       );
     }
   }
@@ -1193,6 +1219,7 @@ export class ApplyFigureCommand implements Command {
     duration: number;
     newDuration: number;
     originalPitch: number;
+    cc?: { controller: number; value: number };
   }> = [];
 
   constructor(
@@ -1284,6 +1311,7 @@ export class ApplyFigureCommand implements Command {
           duration: note.duration,
           newDuration,
           originalPitch: note.originalPitch ?? pitch,
+          cc: note.cc ? { ...note.cc } : undefined,
         });
 
         cumulative += dur;
@@ -1305,7 +1333,8 @@ export class ApplyFigureCommand implements Command {
         moved.pitch,
         moved.newVelocity,
         moved.newDuration,
-        moved.originalPitch
+        moved.originalPitch,
+        moved.cc
       );
 
       // Update selection
@@ -1328,7 +1357,8 @@ export class ApplyFigureCommand implements Command {
         moved.pitch,
         moved.velocity,
         moved.duration,
-        moved.originalPitch
+        moved.originalPitch,
+        moved.cc
       );
 
       // Update selection back
@@ -1382,6 +1412,7 @@ export class ChordQuantizeCommand implements Command {
     velocity: number;
     duration: number;
     originalPitch: number;
+    cc?: { controller: number; value: number };
   }> = [];
 
   constructor(
@@ -1431,6 +1462,7 @@ export class ChordQuantizeCommand implements Command {
         velocity: note.velocity,
         duration: note.duration,
         originalPitch: note.originalPitch ?? pitch,
+        cc: note.cc ? { ...note.cc } : undefined,
       });
     }
 
@@ -1446,7 +1478,8 @@ export class ChordQuantizeCommand implements Command {
         moved.newPitch,
         moved.velocity,
         moved.duration,
-        moved.newPitch // originalPitch = new pitch (quantized)
+        moved.newPitch, // originalPitch = new pitch (quantized)
+        moved.cc
       );
 
       // Update selection
@@ -1469,7 +1502,8 @@ export class ChordQuantizeCommand implements Command {
         moved.oldPitch,
         moved.velocity,
         moved.duration,
-        moved.originalPitch
+        moved.originalPitch,
+        moved.cc
       );
 
       // Update selection back
