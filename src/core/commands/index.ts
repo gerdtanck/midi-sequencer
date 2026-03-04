@@ -5,6 +5,7 @@ export { MoveNotesCommand } from './MoveNotesCommand';
 export { ResizeNoteCommand } from './ResizeNoteCommand';
 export { PasteNotesCommand } from './PasteNotesCommand';
 export { ChangeVelocityCommand } from './ChangeVelocityCommand';
+export { RecordCommand } from './RecordCommand';
 export type { TransformTarget, RandomizeProperty } from './TransformCommands';
 export {
   NudgeNotesCommand,

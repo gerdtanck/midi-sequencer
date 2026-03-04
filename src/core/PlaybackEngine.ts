@@ -1,6 +1,7 @@
 import type { Sequence } from './Sequence';
 import type { MidiManager } from '@/midi/MidiManager';
 import type { LookaheadScheduler } from '@/scheduler/LookaheadScheduler';
+import type { RecordingManager, RecordingResult } from './RecordingManager';
 import { MidiClockGenerator } from '@/scheduler/MidiClockGenerator';
 import { SUBSTEPS_PER_STEP } from '@/config/GridConfig';
 import { snapToSubstep } from '@/utils';
@@ -44,6 +45,10 @@ export class PlaybackEngine {
   // Global playback state
   private _isPlaying = false;
   private _bpm = 120;
+
+  // Recording integration
+  private recordingManager: RecordingManager | null = null;
+  private onRecordingComplete: ((result: RecordingResult) => void) | null = null;
 
   // Position update callback (reports active sequence position)
   private onPositionChange: PlaybackPositionCallback | null = null;
@@ -106,6 +111,32 @@ export class PlaybackEngine {
   }
 
   /**
+   * Set recording manager for record-during-playback
+   */
+  setRecordingManager(rm: RecordingManager): void {
+    this.recordingManager = rm;
+  }
+
+  /**
+   * Set callback for when recording completes
+   */
+  setRecordingCompleteCallback(fn: (result: RecordingResult) => void): void {
+    this.onRecordingComplete = fn;
+  }
+
+  /**
+   * Get the step actually playing right now, rounded to nearest full step.
+   * state.currentStep is the next substep to be *scheduled* (ahead of real time
+   * due to the lookahead). Subtract the lookahead offset to get the real-time step.
+   */
+  getActiveStep(): number {
+    const state = this.states[this.activeIndex];
+    const now = performance.now();
+    const realStep = state.currentStep - (state.nextStepTime - now) / this.fullStepDurationMs();
+    return Math.max(0, Math.round(realStep));
+  }
+
+  /**
    * Start playback
    */
   start(): void {
@@ -132,6 +163,11 @@ export class PlaybackEngine {
     // Start MIDI clock
     this.clockGenerator.start();
 
+    // Start recording if armed
+    if (this.recordingManager?.isArmed()) {
+      this.recordingManager.startRecording();
+    }
+
     // Begin playback loop
     this.scheduleNextStep();
 
@@ -147,6 +183,14 @@ export class PlaybackEngine {
     }
 
     this._isPlaying = false;
+
+    // Stop recording if active
+    if (this.recordingManager?.isRecording()) {
+      const result = this.recordingManager.stopRecording();
+      if (this.onRecordingComplete && (result.notes.length > 0 || result.ccEvents.length > 0)) {
+        this.onRecordingComplete(result);
+      }
+    }
 
     // Stop MIDI clock
     this.clockGenerator.stop();

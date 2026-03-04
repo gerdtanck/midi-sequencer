@@ -1,11 +1,13 @@
 import './ui/styles.css';
 import { NoteGrid } from './ui/grid';
 import { PlaybackEngine, SequenceManager } from './core';
+import { RecordingManager } from './core/RecordingManager';
 import { ScaleManager } from './core/ScaleManager';
 import { MidiManager } from './midi';
 import { LookaheadScheduler } from './scheduler';
 import { TransportControls, ScaleSelector, TransformControls } from './ui/controls';
 import { KeyboardShortcuts } from './ui/KeyboardShortcuts';
+import { RecordCommand } from './core/commands';
 import { BASE_MIDI } from './config/GridConfig';
 
 /**
@@ -17,6 +19,7 @@ let scaleManager: ScaleManager | null = null;
 let midiManager: MidiManager | null = null;
 let scheduler: LookaheadScheduler | null = null;
 let playbackEngine: PlaybackEngine | null = null;
+let recordingManager: RecordingManager | null = null;
 let transportControls: TransportControls | null = null;
 let scaleSelector: ScaleSelector | null = null;
 let transformControls: TransformControls | null = null;
@@ -132,11 +135,34 @@ function initApp(): void {
     midiManager?.sendCC(channel, controller, value);
   });
 
+  // Initialize recording manager
+  recordingManager = new RecordingManager();
+  recordingManager.setSequence(sequenceManager.getActiveSequence());
+  recordingManager.setStepProvider(() => playbackEngine!.getActiveStep());
+  recordingManager.setScreenCenterProvider(() => noteGrid!.getScreenCenterPitch());
+  recordingManager.setPlaybackStateProvider(() => playbackEngine!.isPlaying);
+  recordingManager.setMidiThruCallback((msg) => midiManager!.sendRaw(msg));
+  midiManager.setMidiInputCallback((msg) => {
+    recordingManager!.handleMidiMessage(msg);
+    transportControls?.showMidiInput(msg);
+  });
+  playbackEngine.setRecordingManager(recordingManager);
+  playbackEngine.setRecordingCompleteCallback((result) => {
+    if (!sequenceManager || !noteGrid) return;
+    const cmd = new RecordCommand(
+      sequenceManager.getActiveSequence(),
+      result.notes,
+      result.ccEvents
+    );
+    noteGrid.getCommandHistory().pushWithoutExecute(cmd);
+  });
+
   // Initialize transport controls
   if (transportContainer) {
     transportControls = new TransportControls(transportContainer, playbackEngine, midiManager);
     transportControls.setSequenceManager(sequenceManager);
     transportControls.setNoteGrid(noteGrid);
+    transportControls.setRecordingManager(recordingManager);
 
     // Handle sequence selection
     transportControls.setSequenceSelectCallback((index: number) => {
@@ -150,6 +176,9 @@ function initApp(): void {
 
       // Switch note grid to new sequence
       noteGrid.setSequence(sequenceManager.getActiveSequence());
+
+      // Update recording target sequence
+      recordingManager?.setSequence(sequenceManager.getActiveSequence());
     });
 
     transportControls.render();
@@ -194,6 +223,7 @@ function initApp(): void {
     midiManager,
     scheduler,
     playbackEngine,
+    recordingManager,
     keyboardShortcuts,
     transformControls,
   });

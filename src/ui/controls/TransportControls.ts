@@ -1,6 +1,7 @@
 import type { PlaybackEngine } from '@/core/PlaybackEngine';
 import type { MidiManager } from '@/midi/MidiManager';
 import type { SequenceManager } from '@/core/SequenceManager';
+import type { RecordingManager } from '@/core/RecordingManager';
 import type { NoteGrid } from '../grid/NoteGrid';
 
 /**
@@ -26,6 +27,7 @@ export class TransportControls {
   private midiManager: MidiManager;
   private sequenceManager: SequenceManager | null = null;
   private noteGrid: NoteGrid | null = null;
+  private recordingManager: RecordingManager | null = null;
 
   // Callbacks
   private onSequenceSelect: SequenceSelectCallback | null = null;
@@ -37,6 +39,8 @@ export class TransportControls {
   private bpmInput: HTMLInputElement | null = null;
   private channelSelect: HTMLSelectElement | null = null;
   private deviceSelect: HTMLSelectElement | null = null;
+  private inputDeviceSelect: HTMLSelectElement | null = null;
+  private recordButton: HTMLButtonElement | null = null;
   private panicButton: HTMLButtonElement | null = null;
   private statusText: HTMLElement | null = null;
   private enableMidiButton: HTMLButtonElement | null = null;
@@ -47,6 +51,7 @@ export class TransportControls {
   private lockOctavesBtn: HTMLButtonElement | null = null;
   private ccToggleBtn: HTMLButtonElement | null = null;
   private ccSelectBtn: HTMLButtonElement | null = null;
+  private midiInputIndicator: HTMLElement | null = null;
 
   constructor(
     container: HTMLElement,
@@ -82,6 +87,14 @@ export class TransportControls {
     noteGrid.getCommandHistory().onChange(() => {
       this.updateUndoRedoButtons();
     });
+  }
+
+  /**
+   * Set the recording manager for record button
+   */
+  setRecordingManager(recordingManager: RecordingManager): void {
+    this.recordingManager = recordingManager;
+    recordingManager.setStateChangeCallback(() => this.updateRecordButton());
   }
 
   /**
@@ -140,12 +153,19 @@ export class TransportControls {
     this.enableMidiButton.addEventListener('click', () => this.onEnableMidiClick());
     midiSection.appendChild(this.enableMidiButton);
 
-    // Device select (hidden until MIDI is enabled)
+    // Output device select (hidden until MIDI is enabled)
     this.deviceSelect = document.createElement('select');
     this.deviceSelect.className = 'device-select';
     this.deviceSelect.style.display = 'none';
     this.deviceSelect.addEventListener('change', () => this.onDeviceChange());
     midiSection.appendChild(this.deviceSelect);
+
+    // Input device select (hidden until MIDI is enabled)
+    this.inputDeviceSelect = document.createElement('select');
+    this.inputDeviceSelect.className = 'device-select';
+    this.inputDeviceSelect.style.display = 'none';
+    this.inputDeviceSelect.addEventListener('change', () => this.onInputDeviceChange());
+    midiSection.appendChild(this.inputDeviceSelect);
 
     this.statusText = document.createElement('div');
     this.statusText.className = 'control-hint';
@@ -160,6 +180,12 @@ export class TransportControls {
 
     const transportRow = document.createElement('div');
     transportRow.className = 'transport-controls';
+
+    this.recordButton = document.createElement('button');
+    this.recordButton.className = 'transport-btn rec';
+    this.recordButton.textContent = 'Rec';
+    this.recordButton.addEventListener('click', () => this.onRecordClick());
+    transportRow.appendChild(this.recordButton);
 
     this.playButton = document.createElement('button');
     this.playButton.className = 'transport-btn';
@@ -291,23 +317,33 @@ export class TransportControls {
     this.lockOctavesBtn.addEventListener('click', () => this.toggleLock('y'));
     lockRow.appendChild(this.lockOctavesBtn);
 
+    lockSection.appendChild(lockRow);
+
+    const ccRow = document.createElement('div');
+    ccRow.className = 'transport-controls';
+
     this.ccToggleBtn = document.createElement('button');
     this.ccToggleBtn.className = 'transport-btn lock-btn';
     this.ccToggleBtn.textContent = 'CC';
     this.ccToggleBtn.title = 'Toggle CC event input mode';
     this.ccToggleBtn.addEventListener('click', () => this.toggleCCMode());
-    lockRow.appendChild(this.ccToggleBtn);
+    ccRow.appendChild(this.ccToggleBtn);
 
     this.ccSelectBtn = document.createElement('button');
     this.ccSelectBtn.className = 'transport-btn lock-btn';
     this.ccSelectBtn.textContent = '74';
     this.ccSelectBtn.title = 'Select CC controller number';
-    this.ccSelectBtn.style.fontSize = '0.7rem';
     this.ccSelectBtn.addEventListener('click', () => this.showCCSelector());
-    lockRow.appendChild(this.ccSelectBtn);
+    ccRow.appendChild(this.ccSelectBtn);
 
-    lockSection.appendChild(lockRow);
+    lockSection.appendChild(ccRow);
     this.container.appendChild(lockSection);
+
+    // MIDI input monitor (bottom of toolbar)
+    this.midiInputIndicator = document.createElement('div');
+    this.midiInputIndicator.className = 'midi-input-indicator';
+    this.midiInputIndicator.textContent = 'MIDI In: --';
+    this.container.appendChild(this.midiInputIndicator);
 
     // Disable playback controls until MIDI is enabled
     this.setControlsEnabled(false);
@@ -415,15 +451,19 @@ export class TransportControls {
     const success = await this.midiManager.init();
 
     if (success) {
-      // Hide enable button, show device select
+      // Hide enable button, show device selects
       if (this.enableMidiButton) {
         this.enableMidiButton.style.display = 'none';
       }
       if (this.deviceSelect) {
         this.deviceSelect.style.display = '';
       }
+      if (this.inputDeviceSelect) {
+        this.inputDeviceSelect.style.display = '';
+      }
 
       this.updateDeviceList();
+      this.updateInputDeviceList();
       if (this.statusText) {
         const devices = this.midiManager.getDevices();
         this.statusText.textContent =
@@ -431,8 +471,8 @@ export class TransportControls {
       }
 
       // Listen for device changes
-      this.midiManager.onDeviceConnected(() => this.updateDeviceList());
-      this.midiManager.onDeviceDisconnected(() => this.updateDeviceList());
+      this.midiManager.onDeviceConnected(() => { this.updateDeviceList(); this.updateInputDeviceList(); });
+      this.midiManager.onDeviceDisconnected(() => { this.updateDeviceList(); this.updateInputDeviceList(); });
     } else {
       // Show error, re-enable button
       if (this.enableMidiButton) {
@@ -494,6 +534,73 @@ export class TransportControls {
 
       // Enable playback controls
       this.setControlsEnabled(true);
+    }
+  }
+
+  /**
+   * Handle input device selection change
+   */
+  private onInputDeviceChange(): void {
+    if (!this.inputDeviceSelect) return;
+
+    const deviceId = this.inputDeviceSelect.value;
+    if (deviceId) {
+      this.midiManager.selectInputDevice(deviceId);
+    }
+  }
+
+  /**
+   * Update input device dropdown
+   */
+  private updateInputDeviceList(): void {
+    if (!this.inputDeviceSelect) return;
+
+    const devices = this.midiManager.getInputDevices();
+    const selectedDevice = this.midiManager.getSelectedInputDevice();
+
+    this.inputDeviceSelect.innerHTML = '';
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = devices.length > 0 ? '-- MIDI Input --' : 'No inputs available';
+    placeholder.disabled = true;
+    placeholder.selected = !selectedDevice;
+    this.inputDeviceSelect.appendChild(placeholder);
+
+    for (const device of devices) {
+      const option = document.createElement('option');
+      option.value = device.id;
+      option.textContent = device.name;
+      option.selected = selectedDevice?.id === device.id;
+      this.inputDeviceSelect.appendChild(option);
+    }
+  }
+
+  /**
+   * Handle record button click
+   */
+  private onRecordClick(): void {
+    if (!this.recordingManager) return;
+
+    if (this.recordingManager.isArmed()) {
+      this.recordingManager.disarm();
+    } else {
+      this.recordingManager.arm();
+    }
+  }
+
+  /**
+   * Update record button visual state
+   */
+  private updateRecordButton(): void {
+    if (!this.recordButton || !this.recordingManager) return;
+
+    this.recordButton.classList.remove('armed', 'recording');
+
+    if (this.recordingManager.isRecording()) {
+      this.recordButton.classList.add('recording');
+    } else if (this.recordingManager.isArmed()) {
+      this.recordButton.classList.add('armed');
     }
   }
 
@@ -649,43 +756,42 @@ export class TransportControls {
     const existing = document.querySelector('.cc-selector-popup');
     if (existing) { existing.remove(); return; }
 
-    const COMMON_CCS = [
-      { num: 1, name: 'Mod Wheel' },
-      { num: 7, name: 'Volume' },
-      { num: 10, name: 'Pan' },
-      { num: 11, name: 'Expression' },
-      { num: 64, name: 'Sustain' },
-      { num: 71, name: 'Resonance' },
-      { num: 74, name: 'Cutoff' },
-      { num: 91, name: 'Reverb' },
-      { num: 93, name: 'Chorus' },
-    ];
+    const CC_NAMES: Record<number, string> = {
+      0: 'Bank Select', 1: 'Mod Wheel', 2: 'Breath', 4: 'Foot',
+      5: 'Portamento Time', 7: 'Volume', 10: 'Pan', 11: 'Expression',
+      64: 'Sustain', 65: 'Portamento', 66: 'Sostenuto', 67: 'Soft Pedal',
+      68: 'Legato', 71: 'Resonance', 72: 'Release', 73: 'Attack',
+      74: 'Cutoff', 75: 'Decay', 76: 'Vibrato Rate', 77: 'Vibrato Depth',
+      91: 'Reverb', 93: 'Chorus', 94: 'Detune', 95: 'Phaser',
+    };
 
     const popup = document.createElement('div');
     popup.className = 'cc-selector-popup';
     popup.style.cssText = `
       position: fixed; background: #1a1a2e; border: 1px solid #555;
-      border-radius: 4px; padding: 6px; z-index: 1000;
+      border-radius: 4px; padding: 4px; z-index: 1000;
       box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex;
-      flex-direction: column; gap: 2px; font-size: 0.8rem;
+      flex-direction: column; gap: 1px; font-size: 0.75rem;
+      max-height: 300px; overflow-y: auto;
     `;
 
     const rect = this.ccSelectBtn.getBoundingClientRect();
-    popup.style.left = `${rect.left}px`;
+    popup.style.right = `${window.innerWidth - rect.right}px`;
     popup.style.bottom = `${window.innerHeight - rect.top + 4}px`;
 
-    for (const cc of COMMON_CCS) {
+    for (let cc = 0; cc < 128; cc++) {
       const item = document.createElement('button');
       item.style.cssText = `
-        background: transparent; border: none; color: #ccc; padding: 4px 8px;
+        background: transparent; border: none; color: #ccc; padding: 3px 8px;
         cursor: pointer; text-align: left; border-radius: 3px; white-space: nowrap;
       `;
-      item.textContent = `${cc.num}: ${cc.name}`;
+      const name = CC_NAMES[cc];
+      item.textContent = name ? `${cc}: ${name}` : String(cc);
       item.addEventListener('mouseenter', () => { item.style.background = '#333'; });
       item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
       item.addEventListener('click', () => {
-        this.noteGrid?.setCCController(cc.num);
-        if (this.ccSelectBtn) this.ccSelectBtn.textContent = String(cc.num);
+        this.noteGrid?.setCCController(cc);
+        if (this.ccSelectBtn) this.ccSelectBtn.textContent = String(cc);
         popup.remove();
       });
       popup.appendChild(item);
@@ -713,6 +819,38 @@ export class TransportControls {
     } else {
       this.fullscreenButton.textContent = 'Fullscreen';
     }
+  }
+
+  /**
+   * Display last received MIDI input message
+   */
+  showMidiInput(message: number[]): void {
+    if (!this.midiInputIndicator || message.length < 2) return;
+
+    const status = message[0];
+    const type = status & 0xf0;
+    const channel = (status & 0x0f) + 1;
+
+    let desc: string;
+    if (type === 0x90 && message.length >= 3 && message[2] > 0) {
+      desc = `Ch${channel} NoteOn ${message[1]} vel:${message[2]}`;
+    } else if (type === 0x80 || (type === 0x90 && message.length >= 3 && message[2] === 0)) {
+      desc = `Ch${channel} NoteOff ${message[1]}`;
+    } else if (type === 0xb0 && message.length >= 3) {
+      desc = `Ch${channel} CC${message[1]} val:${message[2]}`;
+      // Pre-assign CC controller number from last received CC
+      const ccNum = message[1];
+      this.noteGrid?.setCCController(ccNum);
+      if (this.ccSelectBtn) this.ccSelectBtn.textContent = String(ccNum);
+    } else if (type === 0xe0 && message.length >= 3) {
+      desc = `Ch${channel} PitchBend ${message[1] | (message[2] << 7)}`;
+    } else {
+      desc = `${message.map(b => b.toString(16).padStart(2, '0')).join(' ')}`;
+    }
+
+    this.midiInputIndicator.textContent = `MIDI In: ${desc}`;
+    this.midiInputIndicator.classList.add('active');
+    setTimeout(() => this.midiInputIndicator?.classList.remove('active'), 150);
   }
 
   /**

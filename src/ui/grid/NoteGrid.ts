@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GridConfig, CameraState, DEFAULT_GRID_CONFIG, DEFAULT_NOTE_VELOCITY, DEFAULT_NOTE_DURATION } from '@/config/GridConfig';
+import { GridConfig, CameraState, DEFAULT_GRID_CONFIG, DEFAULT_NOTE_VELOCITY, DEFAULT_NOTE_DURATION, BASE_MIDI } from '@/config/GridConfig';
 import { GridLines } from './GridLines';
 import { GridControls } from './GridControls';
 import { NoteRenderer } from './NoteRenderer';
@@ -737,6 +737,14 @@ export class NoteGrid {
       top: this.camera.top,
       bottom: this.camera.bottom,
     };
+  }
+
+  /**
+   * Get the MIDI pitch at the vertical center of the current view
+   */
+  getScreenCenterPitch(): number {
+    const centerSemitone = (this.camera.top + this.camera.bottom) / 2;
+    return Math.round(BASE_MIDI + centerSemitone);
   }
 
   /**

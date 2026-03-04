@@ -1,5 +1,6 @@
 export { Sequence } from './Sequence';
 export { PlaybackEngine } from './PlaybackEngine';
+export { RecordingManager } from './RecordingManager';
 export { SelectionManager } from './SelectionManager';
 export { SequenceManager } from './SequenceManager';
 export type { Note, LoopMarkers, SequenceChangeListener } from './types';

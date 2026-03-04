@@ -65,6 +65,17 @@ export class CommandHistory {
   }
 
   /**
+   * Push a command to the undo stack without calling execute().
+   * Used for recording where data is already in the sequence.
+   */
+  pushWithoutExecute(command: Command): void {
+    this.undoStack.push(command);
+    this.redoStack = [];
+    if (this.undoStack.length > this.maxHistory) this.undoStack.shift();
+    this.notifyListeners();
+  }
+
+  /**
    * Undo the last command
    * @returns The undone command, or null if nothing to undo
    */

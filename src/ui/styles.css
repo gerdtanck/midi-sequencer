@@ -230,6 +230,40 @@ body {
   filter: brightness(1.1);
 }
 
+.transport-btn.rec.armed {
+  color: #ff4444;
+  border-color: #ff4444;
+  animation: pulse-rec 1s ease-in-out infinite;
+}
+
+.transport-btn.rec.recording {
+  background: #ff4444;
+  color: white;
+  border-color: #ff4444;
+}
+
+@keyframes pulse-rec {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.midi-input-indicator {
+  margin-top: auto;
+  padding: 6px 8px;
+  font-size: 0.75rem;
+  font-family: monospace;
+  color: #666;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 4px;
+  transition: color 0.1s, border-color 0.1s;
+}
+
+.midi-input-indicator.active {
+  color: #4aff4a;
+  border-color: #4aff4a;
+}
+
 .transport-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;

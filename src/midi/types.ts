@@ -6,6 +6,7 @@ export interface MidiDevice {
   name: string;
   manufacturer: string;
   state: 'connected' | 'disconnected';
+  type: 'input' | 'output';
 }
 
 /**
